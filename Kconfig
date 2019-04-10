@@ -1,0 +1,26 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+config SERVICES_RIL
+	bool "Services RIL"
+	default n
+	---help---
+	Enable the RIL services
+
+if SERVICES_RIL
+
+config SERVICES_RIL_PRIORITY
+	int "ril task priority"
+	default 80
+	---help---
+	The priority for ril task.
+
+config SERVICES_RIL_STACKSIZE
+	int "ril task stack size"
+	default 2048
+	---help---
+	The stack size allocated for the ril task.
+
+endif # SERVICES_RIL
