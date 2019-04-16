@@ -332,3 +332,53 @@ clean:
   at_c_response_free(response);
   return ret;
 }
+
+int get_iccid(int clientfd, at_spi_iccid *piccid)
+{
+  ATResponse *response = NULL;
+  int ret;
+  char *line, *p;
+  memset(piccid, 0x0, sizeof(at_spi_iccid));
+  ret = sendATRequest(clientfd, "AT+NCCID", &response);
+  if (ret < 0 || response->error != NONE_ERROR)
+    {
+      ret = -1;
+      goto clean;
+    }
+  line = response->lines[0];
+  ret = at_tok_start(&line);
+  if (ret < 0)
+    {
+      goto clean;
+    }
+  ret = at_tok_nextstr(&line, &p);
+  if (ret < 0)
+    {
+      goto clean;
+    }
+  strcpy(piccid->iccid, p);
+  ret = 0;
+clean:
+  at_c_response_free(response);
+  return ret;
+}
+
+int get_model(int clientfd, at_spi_model *pmodel)
+{
+  ATResponse *response = NULL;
+  int ret;
+  char *line;
+  memset(pmodel, 0x0, sizeof(at_spi_model));
+  ret = sendATRequest(clientfd, "AT+CGMM", &response);
+  if (ret < 0 || response->error != NONE_ERROR)
+    {
+      ret = -1;
+      goto clean;
+    }
+  line = response->lines[0];
+  strncpy(pmodel->model, line, sizeof(pmodel->model) - 1);
+  ret = 0;
+clean:
+  at_c_response_free(response);
+  return ret;
+}

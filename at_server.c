@@ -156,6 +156,8 @@ static const atcmd_table_s g_atcmd[] =
   {"AT+CGSN", "+CGSN",   SINGLELINE, ATSERVER_UART_MODEM},
   {"AT+CIMI", NULL,   NUMERIC, ATSERVER_UART_MODEM},
   {"AT+PGNSS", NULL,   NO_RESULT, ATSERVER_UART_GPS},
+  {"AT+NCCID", "+NCCID",   SINGLELINE, ATSERVER_UART_MODEM},
+  {"AT+CGMM", NULL,   NUMERIC, ATSERVER_UART_MODEM},
 };
 
 ATUartS gATUarts[ATSERVER_NUARTS];
@@ -955,7 +957,7 @@ static void processLine(const char *line, ATUartS *pAtUarts)
             }
           case NUMERIC:
             {
-              if (pAtUarts->mSpResponse->p_intermediates == NULL && isdigit(line[0]))
+              if (pAtUarts->mSpResponse->p_intermediates == NULL)
                 {
                   addIntermediate(pAtUarts->mSpResponse, line);
                 }

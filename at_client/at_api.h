@@ -44,16 +44,29 @@
 #define IMSI_LENGTH (15)
 #define MCC_LENGTH (3)
 #define MNC_LENGTH (3)
+#define ICCID_LENGTH (20)
+#define MODEL_LENGTH (16)
 
 typedef struct
 {
   char imei[IMEI_LENGTH + 1];
 } at_spi_imei;
 
+
 typedef struct
 {
   char imsi[IMSI_LENGTH + 1];
 } at_api_imsi;
+
+typedef struct
+{
+  char iccid[ICCID_LENGTH + 1];
+} at_spi_iccid;
+
+typedef struct
+{
+  char model[MODEL_LENGTH + 1];
+} at_spi_model;
 
 
 typedef enum
@@ -102,5 +115,6 @@ int set_ceregindicationstatus(int clientfd, int status);
 int get_cellinfo(int clientfd, at_api_cellinfo *pcellinfo);
 int start_gps(int clientfd);
 int stop_gps(int clientfd);
-
+int get_iccid(int clientfd, at_spi_iccid *piccid);
+int get_model(int clientfd, at_spi_model *pmodel);
 #endif
