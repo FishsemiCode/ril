@@ -68,8 +68,10 @@ int set_radiopower(int clientfd, bool on)
   if (ret < 0 || response->error != NONE_ERROR)
     {
       ret = -1;
+      goto clean;
     }
   ret = 0;
+clean:
   at_c_response_free(response);
   return ret;
 }
@@ -134,8 +136,10 @@ int set_ceregindicationstatus(int clientfd, int status)
   if (ret < 0 || response->error != NONE_ERROR)
     {
       ret = -1;
+      goto clean;
     }
   ret = 0;
+clean:
   at_c_response_free(response);
   return ret;
 }
