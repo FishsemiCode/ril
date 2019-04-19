@@ -163,6 +163,10 @@ static const atcmd_table_s g_atcmd[] =
 ATUartS gATUarts[ATSERVER_NUARTS];
 ATServer *gServer;
 
+pthread_mutex_t *gModemReadymutex = NULL;
+pthread_cond_t *gModemReadycond = NULL;
+static bool gModemReady = false;
+
 
 static char * findNextEOL(char *cur)
 {
@@ -421,7 +425,6 @@ static int send_command_full_nolock(const char *command, ATCommandType type,
   return err;
 
 error:
-    syslog(LOG_ERR, "%s %s: btxbtx2\n", LOG_TAG, __func__);
   clearPendingCommand(pAtUarts);
   return err;
 }
@@ -569,6 +572,25 @@ void processCommandBuffer(ATClient *pATClient, void *buffer, size_t buflen)
     {
       syslog(LOG_ERR, "%s Command : %s not supported\n", LOG_TAG, cmd);
       return;
+    }
+  if (!gModemReady)
+    {
+      pthread_mutex_lock(gModemReadymutex);
+      while (!gModemReady)
+        {
+          pthreadCondWait(gModemReadycond, gModemReadymutex, 0);
+        }
+      pthread_mutex_unlock(gModemReadymutex);
+      if (gModemReadymutex)
+        {
+          pthread_mutex_destroy(gModemReadymutex);
+          free(gModemReadymutex);
+        }
+      if (gModemReadycond)
+        {
+          pthread_cond_destroy(gModemReadycond);
+          free(gModemReadycond);
+        }
     }
 
   syslog(LOG_INFO, "%s Client %d processCommandBuffer: process cmd=%s, prefix=%s, index=%d\n",
@@ -906,7 +928,14 @@ static void handleFinalResponse(const char *line, ATUartS *pAtUarts)
 void handleUnsolicited(const char *s)
 {
   ATClient *atClient;
-  pthread_mutex_lock(&(gServer->mClientsLock));
+
+  if (!gModemReady)
+    {
+      pthread_mutex_lock(gModemReadymutex);
+      gModemReady = true;
+      pthread_cond_signal(gModemReadycond);
+      pthread_mutex_unlock(gModemReadymutex);
+    }
   syslog(LOG_INFO, "%s ATServer client count:%d\n", LOG_TAG, sq_count(&(gServer->mClients)));
   for (atClient = (ATClient*)(gServer->mClients.head);
         atClient;
@@ -1093,6 +1122,10 @@ static int ril_daemon(int argc, char *argv[])
       pthread_mutex_init(&(gATUarts[i].mCommandmutex), NULL);
       pthread_cond_init(&(gATUarts[i].mCommandcond), NULL);
     }
+  gModemReadymutex = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
+  gModemReadycond  = (pthread_cond_t *)malloc(sizeof(pthread_cond_t));
+  pthread_mutex_init(gModemReadymutex, NULL);
+  pthread_cond_init(gModemReadycond, NULL);
   if (pthread_create(NULL, NULL, reader_loop, NULL))
     {
       syslog(LOG_ERR, "%s %s: pthread_create (%s)\n", LOG_TAG, __func__, strerror(errno));
@@ -1109,6 +1142,16 @@ clean:
         }
       pthread_mutex_destroy(&(gATUarts[i].mCommandmutex));
       pthread_cond_destroy(&(gATUarts[i].mCommandcond));
+    }
+  if (gModemReadymutex)
+    {
+      pthread_mutex_destroy(gModemReadymutex);
+      free(gModemReadymutex);
+    }
+  if (gModemReadycond)
+    {
+      pthread_cond_destroy(gModemReadycond);
+      free(gModemReadycond);
     }
   return 0;
 }
