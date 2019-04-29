@@ -145,7 +145,7 @@ typedef struct
 static const char *gATServerUartNames[ATSERVER_NUARTS] =
 {
   "/dev/ttyAT1",
-  "/dev/ttyGPS",
+  "/dev/ttyGPS1",
 };
 
 static const atcmd_table_s g_atcmd[] =
