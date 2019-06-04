@@ -51,6 +51,8 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sys/ioctl.h>
+#include <nuttx/misc/misc_rpmsg.h>
 
 #define MAX_AT_SIZE   255
 #define TIMEOUT_DEFALUT (20 * 1000)
@@ -557,6 +559,21 @@ int sendResponse(int fd, bool success, const void *data, char size, char type, c
 }
 
 
+static void wakeup_cp(void)
+{
+  int fd;
+  fd = open("/dev/misc", 0);
+  if (fd >= 0)
+    {
+      struct misc_remote_boot_s remote =
+        {
+          .name = "cp",
+        };
+      ioctl(fd, MISC_REMOTE_BOOT, (unsigned long)&remote);
+      close(fd);
+    }
+}
+
 void processCommandBuffer(ATClient *pATClient, void *buffer, size_t buflen)
 {
   int error;
@@ -575,6 +592,7 @@ void processCommandBuffer(ATClient *pATClient, void *buffer, size_t buflen)
     }
   if (!gModemReady)
     {
+      wakeup_cp();
       pthread_mutex_lock(gModemReadymutex);
       while (!gModemReady)
         {
