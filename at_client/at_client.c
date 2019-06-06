@@ -505,7 +505,7 @@ int at_client_open(void)
     if (ret != 0)
       {
         retryNum++;
-        sleep(1);
+        usleep(100000);
       }
   } while (ret != 0 && retryNum < MAX_RETRY_NUM);
   if (ret != 0)
