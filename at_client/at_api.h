@@ -46,6 +46,7 @@
 #define MNC_LENGTH (3)
 #define ICCID_LENGTH (20)
 #define MODEL_LENGTH (16)
+#define VERSION_LENGTH (20)
 
 typedef struct
 {
@@ -67,6 +68,11 @@ typedef struct
 {
   char model[MODEL_LENGTH + 1];
 } at_spi_model;
+
+typedef struct
+{
+  char version[VERSION_LENGTH + 1];
+} at_api_version;
 
 
 typedef enum
@@ -117,4 +123,5 @@ int start_gps(int clientfd);
 int stop_gps(int clientfd);
 int get_iccid(int clientfd, at_spi_iccid *piccid);
 int get_model(int clientfd, at_spi_model *pmodel);
+int get_version(int clientfd, at_api_version *pversion);
 #endif

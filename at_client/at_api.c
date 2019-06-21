@@ -386,3 +386,23 @@ clean:
   at_c_response_free(response);
   return ret;
 }
+
+int get_version(int clientfd, at_api_version *pversion)
+{
+  ATResponse *response = NULL;
+  int ret;
+  char *line;
+  memset(pversion, 0x0, sizeof(at_api_version));
+  ret = sendATRequest(clientfd, "AT+CGMR", &response);
+  if (ret < 0 || response->error != NONE_ERROR)
+    {
+      ret = -1;
+      goto clean;
+    }
+  line = response->lines[0];
+  strncpy(pversion->version, line, sizeof(pversion->version) - 1);
+  ret = 0;
+clean:
+  at_c_response_free(response);
+  return ret;
+}
