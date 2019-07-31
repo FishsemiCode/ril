@@ -53,6 +53,7 @@
 #include <arpa/inet.h>
 #include <sys/ioctl.h>
 #include <nuttx/misc/misc_rpmsg.h>
+#include "at_client/at_log.h"
 
 #define MAX_AT_SIZE   255
 #define TIMEOUT_DEFALUT (20 * 1000)
@@ -169,6 +170,7 @@ ATServer *gServer;
 pthread_mutex_t *gModemReadymutex = NULL;
 pthread_cond_t *gModemReadycond = NULL;
 static bool gModemReady = false;
+
 
 
 static char * findNextEOL(char *cur)
@@ -392,7 +394,7 @@ static int send_command_full_nolock(const char *command, ATCommandType type,
   if (pAtUarts->mSpResponse != NULL)
     {
       err = AT_ERROR_COMMAND_PENDING;
-      syslog(LOG_ERR, "%s %s: at error command pending\n", LOG_TAG, __func__);
+      rillog(LOG_ERR, "%s %s: at error command pending\n", LOG_TAG, __func__);
       goto error;
     }
   err = writeline(command, pAtUarts->mfd);
@@ -446,7 +448,7 @@ int at_send_command_full(const char *command, ATCommandType type,const char *res
 
   if (err == AT_ERROR_TIMEOUT)
     {
-      syslog(LOG_ERR, "%s %s: at timeout\n", LOG_TAG, __func__);
+      rillog(LOG_ERR, "%s %s: %s timeout\n", LOG_TAG, __func__, command);
     }
   return err;
 }
@@ -456,7 +458,7 @@ static int sendATcommand(const char *atcmd, ATCommandType type, const char *pref
 {
   int err;
   err = at_send_command_full(atcmd, type, prefix, NULL, AT_COMMAND_TIMEOUT, pp_response, pAtUarts);
-  syslog(LOG_ERR, "%s sendATcommand: %s, err:%d\n", LOG_TAG, atcmd, err);
+  rillog(LOG_INFO, "%s sendATcommand: %s, err:%d\n", LOG_TAG, atcmd, err);
   return err;
 }
 
@@ -500,7 +502,7 @@ int writeUntil(const void *buffer, size_t len, int fd)
         }
       else
         {
-          syslog(LOG_ERR, "%s writeUntil: unexpected error on write %d errno:%s", LOG_TAG, fd, strerror(errno));
+          rillog(LOG_ERR, "%s writeUntil: unexpected error on write %d errno:%s", LOG_TAG, fd, strerror(errno));
           return -1;
         }
     }
@@ -588,7 +590,7 @@ void processCommandBuffer(ATClient *pATClient, void *buffer, size_t buflen)
   char* cmd = (char*)buffer;
   if (findATcmdTypeAndPrefix(cmd, &prefix, &atCmdType, &uartIndex) == 0)
     {
-      syslog(LOG_ERR, "%s Command : %s not supported\n", LOG_TAG, cmd);
+      rillog(LOG_ERR, "%s Command : %s not supported\n", LOG_TAG, cmd);
       return;
     }
   if (!gModemReady)
@@ -612,7 +614,7 @@ void processCommandBuffer(ATClient *pATClient, void *buffer, size_t buflen)
         }
     }
 
-  syslog(LOG_INFO, "%s Client %d processCommandBuffer: process cmd=%s, prefix=%s, index=%d\n",
+  rillog(LOG_INFO, "%s Client %d processCommandBuffer: process cmd=%s, prefix=%s, index=%d\n",
     LOG_TAG, pATClient->mToken, cmd, prefix, uartIndex);
   error = sendATcommand(cmd, atCmdType, prefix, &p_response, gATUarts + uartIndex);
   if( error < 0 || p_response->success == 0)
@@ -655,7 +657,7 @@ bool onDataAvailable(ATClient *pATClient)
   buf = (char *)malloc(MAX_AT_SIZE + 1);
   memset(buf, 0x0, MAX_AT_SIZE + 1);
   ret = read(pATClient->mfd, &bufLen, 1);
-  syslog(LOG_INFO, "%s onDataAvailable: read:%d,%d\n", LOG_TAG, ret, bufLen);
+  rillog(LOG_INFO, "%s onDataAvailable: read:%d,%d\n", LOG_TAG, ret, bufLen);
   if (ret != 1)
     {
       free(buf);
@@ -691,7 +693,7 @@ bool onDataAvailable(ATClient *pATClient)
 
 void run(ATServer *pATServer)
 {
-  syslog(LOG_INFO, "%s ATServer is started\n", LOG_TAG);
+  rillog(LOG_INFO, "%s ATServer is started\n", LOG_TAG);
   sq_queue_t pendingList;
   sq_init(&pendingList);
   while(1)
@@ -710,7 +712,7 @@ void run(ATServer *pATServer)
             atClient = (ATClient*)sq_next(&(atClient->mClientLcNode)))
         {
           int fd = atClient->mfd;
-          syslog(LOG_INFO, "%s ATServer found client:%d\n", LOG_TAG, fd);
+          rillog(LOG_INFO, "%s ATServer found client:%d\n", LOG_TAG, fd);
           FD_SET(fd, &read_fds);
           if (fd > max)
             {
@@ -724,7 +726,7 @@ void run(ATServer *pATServer)
             {
               continue;
             }
-          syslog(LOG_ERR, "%s select failed (%s) max=%d\n", LOG_TAG, strerror(errno), max);
+          rillog(LOG_ERR, "%s select failed (%s) max=%d\n", LOG_TAG, strerror(errno), max);
           sleep(1);
           continue;
         }
@@ -741,17 +743,17 @@ void run(ATServer *pATServer)
             {
               alen = sizeof(addr);
               c = accept(pATServer->mSock, &addr, &alen);
-              syslog(LOG_ERR, "%s ATServer got %d from accept\n", LOG_TAG, c);
+              rillog(LOG_INFO, "%s ATServer got %d from accept\n", LOG_TAG, c);
             } while (c < 0 && errno == EINTR);
           if (c < 0)
             {
-              syslog(LOG_ERR, "%s accept failed (%s)\n", LOG_TAG, strerror(errno));
+              rillog(LOG_ERR, "%s accept failed (%s)\n", LOG_TAG, strerror(errno));
               sleep(1);
               continue;
             }
           if (fcntl(c, F_SETFL, O_NONBLOCK) < 0)
             {
-              syslog(LOG_ERR, "%s Error setting O_NONBLOCK errno:%d\n", LOG_TAG, errno);
+              rillog(LOG_ERR, "%s Error setting O_NONBLOCK errno:%d\n", LOG_TAG, errno);
             }
           atClient = (ATClient*)malloc(sizeof(ATClient));
           atClient->mfd = c;
@@ -780,7 +782,7 @@ void run(ATServer *pATServer)
           atClient = atPendingClient->mAtCLient;
           if (!onDataAvailable(atClient))
             {
-              syslog(LOG_ERR, "%s %s: remove client:%d\n", __func__, LOG_TAG, atClient->mfd);
+              rillog(LOG_INFO, "%s %s: remove client:%d\n", __func__, LOG_TAG, atClient->mfd);
               pthread_mutex_lock(&(pATServer->mClientsLock));
               sq_rem(&(atClient->mClientLcNode), &(pATServer->mClients));
               pthread_mutex_unlock(&(pATServer->mClientsLock));
@@ -789,7 +791,7 @@ void run(ATServer *pATServer)
           free(atPendingClient);
         }
     }
-  syslog(LOG_INFO, "%s ATServer is closed\n", LOG_TAG);
+  rillog(LOG_ERR, "%s ATServer is closed\n", LOG_TAG);
 }
 
 int startServer(ATServer *pATServer)
@@ -801,7 +803,7 @@ int startServer(ATServer *pATServer)
   pATServer->mSock = socket(AF_UNIX, SOCK_STREAM, 0);
   if (pATServer->mSock < 0)
     {
-      syslog(LOG_ERR, "%s %s: Failed to get socket %s\n", LOG_TAG, __func__, pATServer->mSocketName);
+      rillog(LOG_ERR, "%s %s: Failed to get socket %s\n", LOG_TAG, __func__, pATServer->mSocketName);
       return -1;
     }
   server_address.sun_family = AF_UNIX;
@@ -811,7 +813,7 @@ int startServer(ATServer *pATServer)
   ret = bind(pATServer->mSock, (struct sockaddr *)&server_address, server_len);
   if (ret < 0)
     {
-      syslog(LOG_ERR, "%s %s: Failed to bind socket '%d': %s\n",
+      rillog(LOG_ERR, "%s %s: Failed to bind socket '%d': %s\n",
         LOG_TAG, __func__, ret, strerror(errno));
       close(pATServer->mSock);
       return -1;
@@ -820,7 +822,7 @@ int startServer(ATServer *pATServer)
   ret = listen(pATServer->mSock, 4);
   if (ret < 0)
     {
-      syslog(LOG_ERR, "%s %s: Failed to listen on control socket '%d': %s\n",
+      rillog(LOG_ERR, "%s %s: Failed to listen on control socket '%d': %s\n",
         LOG_TAG, __func__, ret, strerror(errno));
       close(pATServer->mSock);
       return -1;
@@ -847,7 +849,7 @@ void ATServerRun(void)
   ATServer_initialize(gServer, "/dev/atil");
   if (startServer(gServer))
     {
-      syslog(LOG_ERR, "%s Unable to start at server\n", LOG_TAG);
+      rillog(LOG_ERR, "%s Unable to start at server\n", LOG_TAG);
     }
   free(gServer);
   return;
@@ -867,7 +869,7 @@ static int readChannel(ATUartS *pAtUarts)
   else
     {
       int CurIdx = pAtUarts->mATBufferCur - pAtUarts->mATBuffer;
-      syslog(LOG_INFO, "%s %s ATBufferCur not empty, start at %d: %s\n", LOG_TAG, __func__, CurIdx, pAtUarts->mATBufferCur);
+      rillog(LOG_INFO, "%s %s ATBufferCur not empty, start at %d: %s\n", LOG_TAG, __func__, CurIdx, pAtUarts->mATBufferCur);
       size_t len = strlen(pAtUarts->mATBufferCur);
       if (CurIdx > 0)
         {
@@ -879,16 +881,16 @@ static int readChannel(ATUartS *pAtUarts)
 
   if (0 == MAX_AT_SIZE - (p_read - pAtUarts->mATBuffer))
     {
-      syslog(LOG_ERR, "%s ERROR: Input line exceeded buffer\n", LOG_TAG);
+      rillog(LOG_ERR, "%s ERROR: Input line exceeded buffer\n", LOG_TAG);
       pAtUarts->mATBufferCur = pAtUarts->mATBuffer;
       *(pAtUarts->mATBufferCur) = '\0';
       p_read = pAtUarts->mATBuffer;
     }
   do
     {
-      syslog(LOG_INFO, "%s begin read bufsize=%d\n", LOG_TAG, (int)(MAX_AT_SIZE - (p_read - pAtUarts->mATBuffer)));
+      rillog(LOG_INFO, "%s begin read bufsize=%d\n", LOG_TAG, (int)(MAX_AT_SIZE - (p_read - pAtUarts->mATBuffer)));
       count = read(pAtUarts->mfd, p_read, MAX_AT_SIZE - (p_read - pAtUarts->mATBuffer));
-      syslog(LOG_INFO, "%s end read count=%d\n", LOG_TAG, count);
+      rillog(LOG_INFO, "%s end read count=%d\n", LOG_TAG, count);
     } while (count < 0 && errno == EINTR);
 
   if (count > 0)
@@ -899,11 +901,11 @@ static int readChannel(ATUartS *pAtUarts)
     {
       if (count == 0)
         {
-          syslog(LOG_ERR, "%s atchannel: EOF reached\n", LOG_TAG);
+          rillog(LOG_ERR, "%s atchannel: EOF reached\n", LOG_TAG);
         }
       else
         {
-          syslog(LOG_ERR, "%s atchannel: read error %s\n", LOG_TAG, strerror(errno));
+          rillog(LOG_ERR, "%s atchannel: read error %s\n", LOG_TAG, strerror(errno));
         }
     }
   return count;
@@ -955,12 +957,12 @@ void handleUnsolicited(const char *s)
       pthread_cond_signal(gModemReadycond);
       pthread_mutex_unlock(gModemReadymutex);
     }
-  syslog(LOG_INFO, "%s ATServer client count:%d\n", LOG_TAG, sq_count(&(gServer->mClients)));
+  rillog(LOG_INFO, "%s ATServer client count:%d\n", LOG_TAG, sq_count(&(gServer->mClients)));
   for (atClient = (ATClient*)(gServer->mClients.head);
         atClient;
         atClient = (ATClient*)sq_next(&(atClient->mClientLcNode)))
     {
-      syslog(LOG_INFO, "%s %s send %d %s\n", LOG_TAG, __func__, atClient->mfd, s);
+      rillog(LOG_INFO, "%s %s send %d %s\n", LOG_TAG, __func__, atClient->mfd, s);
       sendResponse(atClient->mfd, true, s, strlen(s)+ 1, AT_RESPONSE_TYPE_UNSOLICITED, 1);
     }
   pthread_mutex_unlock(&(gServer->mClientsLock));
@@ -970,7 +972,7 @@ void handleUnsolicited(const char *s)
 static void processLine(const char *line, ATUartS *pAtUarts)
 {
   static bool bCellInfoProcess = false;
-  syslog(LOG_INFO, "%s %s entry: process line: %s\n", LOG_TAG, __func__, line);
+  rillog(LOG_INFO, "%s %s entry: process line: %s\n", LOG_TAG, __func__, line);
   pthread_mutex_lock(&(pAtUarts->mCommandmutex));
   if (pAtUarts->mSpResponse == NULL)
     {
@@ -1045,12 +1047,12 @@ static void processLine(const char *line, ATUartS *pAtUarts)
             }
           default:
             {
-              syslog(LOG_ERR, "%s Unsupported AT command type %d\n", LOG_TAG, pAtUarts->mCommandType);
+              rillog(LOG_ERR, "%s Unsupported AT command type %d\n", LOG_TAG, pAtUarts->mCommandType);
               handleUnsolicited(line);
             }
           }
     }
-  syslog(LOG_ERR, "%s %s exit\n", LOG_TAG, __func__);
+  rillog(LOG_INFO, "%s %s exit\n", LOG_TAG, __func__);
   pthread_mutex_unlock(&(pAtUarts->mCommandmutex));
 }
 
@@ -1071,7 +1073,7 @@ static int channelReader(ATUartS *pAtUarts)
         }
       else
         {
-          syslog(LOG_INFO, "%s %s line:%s\n", LOG_TAG, __func__, line);
+          rillog(LOG_INFO, "%s %s line:%s\n", LOG_TAG, __func__, line);
         }
       processLine(line, pAtUarts);
     }
@@ -1111,7 +1113,7 @@ void *reader_loop(void *obj)
         {
           if (FD_ISSET(gATUarts[i].mfd, &readset))
             {
-              syslog(LOG_INFO, "%s %s index:%d\n", LOG_TAG, __func__, i);
+              rillog(LOG_INFO, "%s %s index:%d\n", LOG_TAG, __func__, i);
               if (channelReader(gATUarts + i) < 0)
                 {
                   readSuccess = false;
@@ -1130,12 +1132,12 @@ void *reader_loop(void *obj)
 static int ril_daemon(int argc, char *argv[])
 {
   int i;
-  syslog(LOG_INFO, "%s %s: ril_daemon running\n", LOG_TAG, __func__);
+  rillog(LOG_INFO, "%s %s: ril_daemon running\n", LOG_TAG, __func__);
   for (i = 0; i < ATSERVER_NUARTS; i++)
     {
       if ((gATUarts[i].mfd = open(gATServerUartNames[i], O_RDWR)) < 0)
         {
-          syslog(LOG_ERR, "%s %s: open device %s error\n", LOG_TAG, __func__, gATServerUartNames[i]);
+          rillog(LOG_ERR, "%s %s: open device %s error\n", LOG_TAG, __func__, gATServerUartNames[i]);
           goto clean;
         }
       pthread_mutex_init(&(gATUarts[i].mCommandmutex), NULL);
@@ -1147,7 +1149,7 @@ static int ril_daemon(int argc, char *argv[])
   pthread_cond_init(gModemReadycond, NULL);
   if (pthread_create(NULL, NULL, reader_loop, NULL))
     {
-      syslog(LOG_ERR, "%s %s: pthread_create (%s)\n", LOG_TAG, __func__, strerror(errno));
+      rillog(LOG_ERR, "%s %s: pthread_create (%s)\n", LOG_TAG, __func__, strerror(errno));
       goto clean;
     }
   ATServerRun();

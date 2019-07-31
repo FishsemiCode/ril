@@ -38,7 +38,7 @@ PRIORITY = CONFIG_SERVICES_RIL_PRIORITY
 STACKSIZE = CONFIG_SERVICES_RIL_STACKSIZE
 
 MAINSRC = at_server.c
-CSRCS   = at_client/at_client.c at_client/at_tok.c at_client/at_api.c
+CSRCS   = at_client/at_client.c at_client/at_tok.c at_client/at_api.c at_client/at_log.c
 CFLAGS_STR := "$(CFLAGS)"
 PROGNAME = ril(EXEEXT)
 include $(APPDIR)/Application.mk

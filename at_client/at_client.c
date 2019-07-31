@@ -51,7 +51,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include "at_client.h"
-
+#include "at_log.h"
 
 static const char *SOCK_NAME = "/dev/atil";
 
@@ -225,7 +225,7 @@ int sendATRequest(int clientfd, const char *ATLine, ATResponse **pp_outResponse)
   pthread_mutex_lock(&gATRequestMutex);
   gAtRequest = atReq;
 
-  syslog(LOG_INFO, "%s %s: clientfd(%d): send command: %s", LOG_TAG, __func__, clientfd, ATLine);
+  rillog(LOG_INFO, "%s %s: clientfd(%d): send command: %s", LOG_TAG, __func__, clientfd, ATLine);
   ret = sendRawRequest(clientfd, ATLine, strlen(ATLine));
   if (ret == -1)
     {
@@ -269,7 +269,7 @@ int register_indication(int clientfd, const char *s, atindication_handler handle
 {
   if (s == NULL)
     {
-      syslog(LOG_ERR, "%s %s: register indication can't be NULL!", LOG_TAG, __func__);
+      rillog(LOG_ERR, "%s %s: register indication can't be NULL!", LOG_TAG, __func__);
       return -1;
     }
   ATIndicationReg *atIndicationReg = (ATIndicationReg *)calloc(1, sizeof(ATIndicationReg));
@@ -282,7 +282,7 @@ int register_indication(int clientfd, const char *s, atindication_handler handle
   atIndicationReg->prefix = strdup(s);
   if(atIndicationReg->prefix == NULL)
     {
-      syslog(LOG_ERR, "%s %s: Not enough memory for indication register", LOG_TAG, __func__);
+      rillog(LOG_ERR, "%s %s: Not enough memory for indication register", LOG_TAG, __func__);
       free(atIndicationReg);
       return -1;
     }
@@ -341,7 +341,7 @@ static int readATResponse(int fd, char *buffer)
   msgLen = buffer[0];
   if (msgLen > MAX_MSG_LENGTH)
     {
-      syslog(LOG_ERR, "%s %s: message is too long, truncate it!", LOG_TAG, __func__);
+      rillog(LOG_ERR, "%s %s: message is too long, truncate it!", LOG_TAG, __func__);
       msgLen = MAX_MSG_LENGTH ;
     }
 
@@ -439,10 +439,10 @@ static void *readerLoop(void *arg)
       buflen = readATResponse(clientfd, buffer);
       if (buflen < 0)
         {
-          syslog(LOG_ERR, "%s End of Stream\n", LOG_TAG);
+          rillog(LOG_ERR, "%s End of Stream\n", LOG_TAG);
           break;
         }
-      syslog(LOG_INFO, "%s readerLoop read %d,%d\n", LOG_TAG, buflen, buffer[0]);
+      rillog(LOG_INFO, "%s readerLoop read %d,%d\n", LOG_TAG, buflen, buffer[0]);
       if (buffer[0] == AT_RESPONSE_TYPE_SOLICITED)
         {
           if (gAtRequest != NULL)
@@ -457,11 +457,11 @@ static void *readerLoop(void *arg)
                   atReq->response->lineNumber = buffer[2];
                   atReq->response->lines = (char **)malloc(atReq->response->lineNumber * sizeof(char *));
                   line = buffer + 3;
-                  syslog(LOG_INFO, "%s readerLoop read %s\n", LOG_TAG, line);
+                  rillog(LOG_INFO, "%s readerLoop read %s\n", LOG_TAG, line);
                   for(i = 0; i < atReq->response->lineNumber; i++)
                     {
                       atReq->response->lines[i] = strdup(getLine(&line));
-                      syslog(LOG_INFO, "%s readerLoop read line %d,%s\n", LOG_TAG, i, atReq->response->lines[i]);
+                      rillog(LOG_INFO, "%s readerLoop read line %d,%s\n", LOG_TAG, i, atReq->response->lines[i]);
                     }
                 }
               pthread_mutex_lock(&atReq->s_commandmutex);
@@ -470,7 +470,7 @@ static void *readerLoop(void *arg)
             }
           else
             {
-              syslog(LOG_ERR, "%s %s: There's no request corresponding to this response", LOG_TAG, __func__);
+              rillog(LOG_ERR, "%s %s: There's no request corresponding to this response", LOG_TAG, __func__);
             }
         }
       else
@@ -479,7 +479,7 @@ static void *readerLoop(void *arg)
           s = (char *)malloc(buflen);
           memset(s, 0x0, buflen);
           memcpy(s, buffer + 1, buflen - 1);
-          syslog(LOG_INFO, "%s clientfd(%d): receive indication: %s", LOG_TAG, clientfd, s);
+          rillog(LOG_INFO, "%s clientfd(%d): receive indication: %s", LOG_TAG, clientfd, s);
           notifyIndication(clientfd, s);
           free(s);
         }
@@ -510,13 +510,13 @@ int at_client_open(void)
   } while (ret != 0 && retryNum < MAX_RETRY_NUM);
   if (ret != 0)
     {
-      syslog(LOG_ERR, "%s %s: connect fail:%d,%s\n", LOG_TAG, __func__, errno, strerror(errno));
+      rillog(LOG_ERR, "%s %s: connect fail:%d,%s\n", LOG_TAG, __func__, errno, strerror(errno));
       return -1;
     }
   ret = pthread_create(&atclient, NULL, readerLoop, (void *)sockfd);
   if (ret < 0)
     {
-      syslog(LOG_ERR, "%s %s: thread create fail\n", LOG_TAG, __func__);
+      rillog(LOG_ERR, "%s %s: thread create fail\n", LOG_TAG, __func__);
       close(sockfd);
       return -1;
     }
