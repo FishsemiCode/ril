@@ -583,7 +583,7 @@ void processCommandBuffer(ATClient *pATClient, void *buffer, size_t buflen)
   ATResponse *p_response = NULL;
   ATCommandType atCmdType;
   char* prefix;
-  char *pStrResponse;
+  char *pStrResponse = NULL;
   char responseLen = 0;
   int uartIndex;
 
@@ -617,6 +617,7 @@ void processCommandBuffer(ATClient *pATClient, void *buffer, size_t buflen)
   rillog(LOG_INFO, "%s Client %d processCommandBuffer: process cmd=%s, prefix=%s, index=%d\n",
     LOG_TAG, pATClient->mToken, cmd, prefix, uartIndex);
   error = sendATcommand(cmd, atCmdType, prefix, &p_response, gATUarts + uartIndex);
+  pthread_mutex_lock(&(gServer->mClientsLock));
   if( error < 0 || p_response->success == 0)
     {
       sendResponse(pATClient->mfd, false, NULL, 2, AT_RESPONSE_TYPE_SOLICITED, 0);
@@ -631,18 +632,26 @@ void processCommandBuffer(ATClient *pATClient, void *buffer, size_t buflen)
           p = (ATLine *)(p->p_next);
           lineNumber++;
         }
-      pStrResponse= (char *)malloc(responseLen + 1);
-      memset(pStrResponse, 0x0, responseLen + 1);
-      p = p_response->p_intermediates;
-      while(p)
+      if (responseLen > 0)
         {
-          strcat(pStrResponse, p->line);
-          strcat(pStrResponse, "\n");
-          p = p->p_next;
+          pStrResponse= (char *)malloc(responseLen + 1);
+          memset(pStrResponse, 0x0, responseLen + 1);
+          p = p_response->p_intermediates;
+          while(p)
+            {
+              strcat(pStrResponse, p->line);
+              strcat(pStrResponse, "\n");
+              p = p->p_next;
+            }
+          sendResponse(pATClient->mfd, true, pStrResponse, strlen(pStrResponse) + 3, AT_RESPONSE_TYPE_SOLICITED, lineNumber);
+          free(pStrResponse);
         }
-      sendResponse(pATClient->mfd, true, pStrResponse, strlen(pStrResponse) + 3, AT_RESPONSE_TYPE_SOLICITED, lineNumber);
-      free(pStrResponse);
+      else
+        {
+          sendResponse(pATClient->mfd, true, NULL, 2, AT_RESPONSE_TYPE_SOLICITED, lineNumber);
+        }
     }
+  pthread_mutex_unlock(&(gServer->mClientsLock));
   at_response_free(p_response);
 }
 
@@ -958,6 +967,7 @@ void handleUnsolicited(const char *s)
       pthread_mutex_unlock(gModemReadymutex);
     }
   rillog(LOG_INFO, "%s ATServer client count:%d\n", LOG_TAG, sq_count(&(gServer->mClients)));
+  pthread_mutex_lock(&(gServer->mClientsLock));
   for (atClient = (ATClient*)(gServer->mClients.head);
         atClient;
         atClient = (ATClient*)sq_next(&(atClient->mClientLcNode)))

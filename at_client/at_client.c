@@ -452,7 +452,8 @@ static void *readerLoop(void *arg)
               atReq = gAtRequest;
               atReq->response->error = buffer[1];
               atReq->response->finalResponse = 1;
-              if (atReq->response->error == 0)
+
+              if (atReq->response->error == 0 && buffer[2] != 0)
                 {
                   atReq->response->lineNumber = buffer[2];
                   atReq->response->lines = (char **)malloc(atReq->response->lineNumber * sizeof(char *));
