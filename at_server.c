@@ -795,6 +795,7 @@ void run(ATServer *pATServer)
               pthread_mutex_lock(&(pATServer->mClientsLock));
               sq_rem(&(atClient->mClientLcNode), &(pATServer->mClients));
               pthread_mutex_unlock(&(pATServer->mClientsLock));
+              close(atClient->mfd);
               free(atClient);
             }
           free(atPendingClient);
