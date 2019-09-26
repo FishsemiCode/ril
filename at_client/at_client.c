@@ -35,6 +35,7 @@
  ****************************************************************************/
 #include <nuttx/config.h>
 
+#include <nuttx/list.h>
 #include <nuttx/serial/pty.h>
 #include <sys/select.h>
 #include <sys/time.h>
@@ -63,6 +64,20 @@ static sq_queue_t gATIndicationRegs;
 
 static pthread_mutex_t ATIndicationRegListMutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t gATRequestMutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t gATClientFdMutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t gATPairListMutex = PTHREAD_MUTEX_INITIALIZER;
+
+static int gClientId;
+
+static struct list_node g_clientfd_id_pair_list = LIST_INITIAL_VALUE(g_clientfd_id_pair_list);
+
+struct clientfd_id_pair_s
+{
+  int clientid;
+  int clientfd;
+  struct list_node list;
+};
+
 ATRequest *gAtRequest;
 
 static void setTimespecRelative(struct timespec *p_ts, long long msec)
@@ -198,11 +213,56 @@ static int sendRawRequest(int fd, const void *data, char size)
   return ret;
 }
 
-int sendATRequest(int clientfd, const char *ATLine, ATResponse **pp_outResponse)
+static int getClientFdFromList(int clientid)
+{
+  struct clientfd_id_pair_s *pair;
+
+  pthread_mutex_lock(&gATPairListMutex);
+  list_for_every_entry(&g_clientfd_id_pair_list, pair, struct clientfd_id_pair_s, list)
+  {
+    if (pair->clientid == clientid)
+    {
+      pthread_mutex_unlock(&gATPairListMutex);
+      return pair->clientfd;
+    }
+  }
+  pthread_mutex_unlock(&gATPairListMutex);
+
+  return -1;
+}
+
+static struct clientfd_id_pair_s * getPairFromList(int clientid)
+{
+  struct clientfd_id_pair_s *pair;
+
+  pthread_mutex_lock(&gATPairListMutex);
+  list_for_every_entry(&g_clientfd_id_pair_list, pair, struct clientfd_id_pair_s, list)
+  {
+    if (pair->clientid == clientid)
+    {
+      pthread_mutex_unlock(&gATPairListMutex);
+      return pair;
+    }
+  }
+  pthread_mutex_unlock(&gATPairListMutex);
+
+  return NULL;
+}
+
+
+int sendATRequest(int clientid, const char *ATLine, ATResponse **pp_outResponse)
 {
   int ret;
   static int mserial = 0;
   ATRequest *atReq = NULL;
+  int clientfd = getClientFdFromList(clientid);
+
+  if (clientfd == -1)
+    {
+      rillog(LOG_ERR, "%s: Failed to get clientfd from clientid %d\n", __func__, clientid);
+      return -1;
+    }
+
   atReq = (ATRequest *)calloc(1, sizeof(ATRequest));
   if (atReq == NULL)
     {
@@ -210,7 +270,7 @@ int sendATRequest(int clientfd, const char *ATLine, ATResponse **pp_outResponse)
     }
 
   atReq->serial = mserial++;
-  atReq->clientfd = clientfd;
+  atReq->clientid = clientid;
 
   atReq->response = (ATResponse *)calloc(1, sizeof(ATResponse));
   if (atReq->response == NULL)
@@ -265,7 +325,7 @@ int sendATRequest(int clientfd, const char *ATLine, ATResponse **pp_outResponse)
   return ret;
 }
 
-int register_indication(int clientfd, const char *s, atindication_handler handler)
+int register_indication(int clientid, const char *s, atindication_handler handler)
 {
   if (s == NULL)
     {
@@ -278,7 +338,7 @@ int register_indication(int clientfd, const char *s, atindication_handler handle
       return -1;
     }
 
-  atIndicationReg->clientfd = clientfd;
+  atIndicationReg->clientid = clientid;
   atIndicationReg->prefix = strdup(s);
   if(atIndicationReg->prefix == NULL)
     {
@@ -295,16 +355,17 @@ int register_indication(int clientfd, const char *s, atindication_handler handle
   return 0;
 }
 
-int deregister_indication(int clientfd, const char *s)
+int deregister_indication(int clientid, const char *s)
 {
   int ret = -1;
+
   ATIndicationReg *atIndicationReg, *atIndicationReg_next;
 
   pthread_mutex_lock(&ATIndicationRegListMutex);
   atIndicationReg = (ATIndicationReg*)(gATIndicationRegs.head);
   while (atIndicationReg)
     {
-      if (atIndicationReg->clientfd == clientfd &&
+      if (atIndicationReg->clientid == clientid &&
           strcmp(atIndicationReg->prefix, s) == 0)
         {
           atIndicationReg_next = (ATIndicationReg*)sq_next(&(atIndicationReg->sqNode));
@@ -362,7 +423,7 @@ static int readATResponse(int fd, char *buffer)
   return msgLen;
 }
 
-static void notifyIndication(int clientfd, char *str)
+static void notifyIndication(int clientid, char *str)
 {
   ATIndicationReg *atIndicationReg;
   pthread_mutex_lock(&ATIndicationRegListMutex);
@@ -371,7 +432,7 @@ static void notifyIndication(int clientfd, char *str)
             atIndicationReg;
             atIndicationReg = (ATIndicationReg*)sq_next(&(atIndicationReg->sqNode)))
     {
-      if (atIndicationReg->clientfd == clientfd &&
+      if (atIndicationReg->clientid == clientid &&
           strStartsWith(str, atIndicationReg->prefix))
         {
           if(atIndicationReg->handler)
@@ -424,13 +485,19 @@ static const char *getLine(char **line)
 }
 static void *readerLoop(void *arg)
 {
-  int clientfd = (int)(long)arg;
+  int clientid = (int)(long)arg;
   char buffer[MAX_MSG_LENGTH];
   int buflen;
-
   ATRequest *atReq;
+  int clientfd = getClientFdFromList(clientid);
 
-  snprintf(buffer, sizeof(buffer), "atClientReadLoop-%d", clientfd);
+  if (clientfd == -1)
+    {
+      rillog(LOG_ERR, "%s: Failed to get clientfd from clientid %d\n", __func__, clientid);
+      return NULL;
+    }
+
+  snprintf(buffer, sizeof(buffer), "atClientReadLoop-%d", clientid);
   pthread_setname_np(pthread_self(), buffer);
   for (;;)
     {
@@ -480,7 +547,7 @@ static void *readerLoop(void *arg)
           memset(s, 0x0, buflen);
           memcpy(s, buffer + 1, buflen - 1);
           rillog(LOG_INFO, "%s clientfd(%d): receive indication: %s", LOG_TAG, clientfd, s);
-          notifyIndication(clientfd, s);
+          notifyIndication(clientid, s);
           free(s);
         }
     }
@@ -491,10 +558,13 @@ int at_client_open(void)
 {
   int ret;
   pthread_t atclient;
+  int clientid;
   int sockfd;
   int len;
   int retryNum = 0;
   struct sockaddr_un address;
+  struct clientfd_id_pair_s *pair;
+
   sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
   address.sun_family = AF_UNIX;
   strcpy(address.sun_path, SOCK_NAME);
@@ -513,22 +583,58 @@ int at_client_open(void)
       rillog(LOG_ERR, "%s %s: connect fail:%d,%s\n", LOG_TAG, __func__, errno, strerror(errno));
       return -1;
     }
-  ret = pthread_create(&atclient, NULL, readerLoop, (void *)sockfd);
+
+  pthread_mutex_lock(&gATClientFdMutex);
+  clientid = gClientId++;
+  pthread_mutex_unlock(&gATClientFdMutex);
+
+  pair = (struct clientfd_id_pair_s *)malloc(sizeof(*pair));
+  if (pair == NULL)
+    {
+      rillog(LOG_ERR, "%s: Failed to alloc sock client pair!\n");
+      close(sockfd);
+      return -1;
+    }
+
+  pair->clientfd = sockfd;
+  pair->clientid = clientid;
+  pthread_mutex_lock(&gATPairListMutex);
+  list_add_tail(&g_clientfd_id_pair_list, &pair->list);
+  pthread_mutex_unlock(&gATPairListMutex);
+
+  ret = pthread_create(&atclient, NULL, readerLoop, (void *)clientid);
   if (ret < 0)
     {
       rillog(LOG_ERR, "%s %s: thread create fail\n", LOG_TAG, __func__);
       close(sockfd);
+      free(pair);
       return -1;
     }
-  return sockfd;
+
+  return pair->clientid;
 }
 
-int at_client_close(int clientfd)
+int at_client_close(int clientid)
 {
   ATIndicationReg *atIndicationReg, *atIndicationReg_next;
+  struct clientfd_id_pair_s *pair = getPairFromList(clientid);
+  int clientfd;
+
+  if (!pair)
+    {
+      rillog(LOG_ERR, "%s: Failed to get pair from clientid %d\n", __func__, clientid);
+      return clientfd;
+    }
+
+  clientfd = pair->clientfd;
   close(clientfd);
+  pthread_mutex_lock(&gATPairListMutex);
+  list_delete(&pair->list);
+  pthread_mutex_unlock(&gATPairListMutex);
+  free(pair);
+
   pthread_mutex_lock(&gATRequestMutex);
-  if (gAtRequest != NULL && clientfd == gAtRequest->clientfd)
+  if (gAtRequest != NULL && clientid == gAtRequest->clientid)
     {
       at_c_request_free(gAtRequest);
     }
@@ -536,16 +642,17 @@ int at_client_close(int clientfd)
   pthread_mutex_unlock(&gATRequestMutex);
   pthread_mutex_lock(&ATIndicationRegListMutex);
   atIndicationReg = (ATIndicationReg*)(gATIndicationRegs.head);
+
   while (atIndicationReg)
     {
-      if (atIndicationReg->clientfd == clientfd)
+      atIndicationReg_next = (ATIndicationReg*)sq_next(&(atIndicationReg->sqNode));
+      if (atIndicationReg->clientid == clientid)
         {
-          atIndicationReg_next = (ATIndicationReg*)sq_next(&(atIndicationReg->sqNode));
           sq_rem(&(atIndicationReg->sqNode), &gATIndicationRegs);
           free(atIndicationReg->prefix);
           free(atIndicationReg);
-          atIndicationReg = atIndicationReg_next;
         }
+      atIndicationReg = atIndicationReg_next;
     }
   pthread_mutex_unlock(&ATIndicationRegListMutex);
 

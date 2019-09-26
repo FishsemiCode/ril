@@ -79,7 +79,7 @@ typedef struct ATRequest
 {
   struct ATRequest *next;
   int serial;
-  int clientfd;
+  int clientid;
   ATResponse *response;
   pthread_cond_t s_commandcond;
   pthread_mutex_t s_commandmutex;
@@ -88,19 +88,19 @@ typedef struct ATRequest
 typedef struct ATIndicationReg
 {
   sq_entry_t sqNode;
-  int clientfd;
+  int clientid;
   atindication_handler handler;
   char *prefix;
 }ATIndicationReg;
 
 
-int sendATRequest(int clientfd, const char *ATLine, ATResponse **pp_outResponse);
-int register_indication(int clientfd, const char *s, atindication_handler handler);
-int deregister_indication(int clientfd, const char *s);
+int sendATRequest(int clientid, const char *ATLine, ATResponse **pp_outResponse);
+int register_indication(int clientid, const char *s, atindication_handler handler);
+int deregister_indication(int clientid, const char *s);
 
 
 int at_client_open(void);
-int at_client_close(int clientfd);
+int at_client_close(int clientid);
 
 void at_c_response_free(ATResponse *p_response);
 
