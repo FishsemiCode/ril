@@ -406,3 +406,124 @@ clean:
   at_c_response_free(response);
   return ret;
 }
+
+int set_singalstrengthindicationstatus(int clientfd, int status)
+{
+  ATResponse *response = NULL;
+  int ret;
+  char buf[11] = {0};
+  snprintf(buf, sizeof(buf), "AT*CSQ=%d", status);
+  ret = sendATRequest(clientfd, buf, &response);
+  if (ret < 0 || response->error != NONE_ERROR)
+    {
+      ret = -1;
+      goto clean;
+    }
+  ret = 0;
+clean:
+  at_c_response_free(response);
+  return ret;
+}
+
+int get_simstatus(int clientfd, SIM_STATUS *pstatus)
+{
+  ATResponse *response = NULL;
+  int ret;
+  char *line;
+  int value;
+  *pstatus = SIM_STATUS_UNKNOWN;
+  ret = sendATRequest(clientfd, "AT^SIMST?", &response);
+  if (ret < 0 || response->error != NONE_ERROR)
+    {
+      ret = -1;
+      goto clean;
+    }
+  line = response->lines[0];
+  ret = at_tok_start(&line);
+  if (ret < 0)
+    {
+      goto clean;
+    }
+  ret = at_tok_nextint(&line, &value);
+  if (ret < 0)
+    {
+      goto clean;
+    }
+
+  if (value == 1)
+    {
+      *pstatus = SIM_STATUS_EXIST;
+    }
+clean:
+  at_c_response_free(response);
+  return ret;
+}
+
+int get_currentoper(int clientfd, at_api_curroper *pcurroper)
+{
+  ATResponse *response = NULL;
+  int ret;
+  char *line;
+  int ignore;
+  int format;
+  char *p;
+  char buf[12] = {0};
+
+  memset(pcurroper, 0x0, sizeof(at_api_curroper));
+  for (format = 0; format < 3; format++)
+    {
+      snprintf(buf, sizeof(buf), "AT+COPS=3,%d", format);
+      ret = sendATRequest(clientfd, buf, &response);
+      if (ret < 0 || response->error != NONE_ERROR)
+      {
+        ret = -1;
+        goto clean;
+      }
+      at_c_response_free(response);
+
+      ret = sendATRequest(clientfd, "AT+COPS?", &response);
+      if (ret < 0 || response->error != NONE_ERROR)
+      {
+        ret = -1;
+        goto clean;
+      }
+      line = response->lines[0];
+      ret = at_tok_start(&line);
+      if (ret < 0)
+      {
+        goto clean;
+      }
+      ret = at_tok_nextint(&line, &ignore);
+      if (ret < 0)
+      {
+        goto clean;
+      }
+      ret = at_tok_nextint(&line, &ignore);
+      if (ret < 0)
+      {
+        goto clean;
+      }
+      ret = at_tok_nextstr(&line, &p);
+      if (ret < 0)
+      {
+        goto clean;
+      }
+      if (format == 0)
+        {
+          strncpy(pcurroper->fullName, p, sizeof(pcurroper->fullName) - 1);
+        }
+      else if (format == 1)
+        {
+          strncpy(pcurroper->shortName, p, sizeof(pcurroper->shortName) - 1);
+        }
+      else
+        {
+          strncpy(pcurroper->numeric, p, sizeof(pcurroper->numeric) - 1);
+        }
+      at_c_response_free(response);
+      response = NULL;
+    }
+clean:
+  at_c_response_free(response);
+  return ret;
+}

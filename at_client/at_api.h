@@ -48,6 +48,10 @@
 #define MODEL_LENGTH (16)
 #define VERSION_LENGTH (20)
 
+#define OPERATOR_NUMERIC_MAX_LENGTH (6)
+#define OPERATOR_ALPHANUMERIC_MAX_LENGTH (32)
+
+
 typedef struct
 {
   char imei[IMEI_LENGTH + 1];
@@ -95,6 +99,14 @@ typedef enum
   CURR_MODE_UNKNOWN,
 } CURR_MODE;
 
+typedef enum
+{
+  SIM_STATUS_UNKNOWN = -1,
+  SIM_STATUS_ABSENT,
+  SIM_STATUS_EXIST,
+} SIM_STATUS;
+
+
 
 typedef struct
 {
@@ -113,6 +125,14 @@ typedef struct
   unsigned short pci;
 } at_api_cellinfo;
 
+typedef struct
+{
+  char numeric[OPERATOR_NUMERIC_MAX_LENGTH + 1];
+  char fullName[OPERATOR_ALPHANUMERIC_MAX_LENGTH + 1];
+  char shortName[OPERATOR_ALPHANUMERIC_MAX_LENGTH + 1];
+} at_api_curroper;
+
+
 
 int set_radiopower(int clientfd, bool on);
 int get_imei(int clientfd, at_spi_imei *pimei);
@@ -124,4 +144,7 @@ int stop_gps(int clientfd);
 int get_iccid(int clientfd, at_spi_iccid *piccid);
 int get_model(int clientfd, at_spi_model *pmodel);
 int get_version(int clientfd, at_api_version *pversion);
+int set_singalstrengthindicationstatus(int clientfd, int status);
+int get_simstatus(int clientfd, SIM_STATUS *pstatus);
+int get_currentoper(int clientfd, at_api_curroper *pcurroper);
 #endif
