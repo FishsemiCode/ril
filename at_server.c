@@ -858,8 +858,6 @@ void ATServer_initialize(ATServer *pATServer, const char *socketName)
 
 void ATServerRun(void)
 {
-  gServer = (ATServer *)malloc(sizeof(ATServer));
-  ATServer_initialize(gServer, "/dev/atil");
   if (startServer(gServer))
     {
       rillog(LOG_ERR, "%s Unable to start at server\n", LOG_TAG);
@@ -1161,6 +1159,8 @@ static int ril_daemon(int argc, char *argv[])
   gModemReadycond  = (pthread_cond_t *)malloc(sizeof(pthread_cond_t));
   pthread_mutex_init(gModemReadymutex, NULL);
   pthread_cond_init(gModemReadycond, NULL);
+  gServer = (ATServer *)malloc(sizeof(ATServer));
+  ATServer_initialize(gServer, "/dev/atil");
   if (pthread_create(NULL, NULL, reader_loop, NULL))
     {
       rillog(LOG_ERR, "%s %s: pthread_create (%s)\n", LOG_TAG, __func__, strerror(errno));
@@ -1187,6 +1187,10 @@ clean:
     {
       pthread_cond_destroy(gModemReadycond);
       free(gModemReadycond);
+    }
+  if (gServer)
+    {
+      free(gServer);
     }
   return 0;
 }
