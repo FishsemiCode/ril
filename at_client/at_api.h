@@ -51,6 +51,7 @@
 #define OPERATOR_NUMERIC_MAX_LENGTH (6)
 #define OPERATOR_ALPHANUMERIC_MAX_LENGTH (32)
 
+#define MAX_DATA_CALLS 2
 
 typedef struct
 {
@@ -106,6 +107,19 @@ typedef enum
   SIM_STATUS_EXIST,
 } SIM_STATUS;
 
+typedef enum
+{
+  PDP_TYPE_UNSUPPORTED = 0,
+  PDP_TYPE_IP = 1 << 0,
+  PDP_TYPE_IPV6 = 1 << 1,
+  PDP_TYPE_IPV4V6 = PDP_TYPE_IP | PDP_TYPE_IPV6
+} PDP_TYPE;
+
+typedef enum
+{
+  DATA_PROFILE_DEFAULT = 0,
+  DATA_PROFILE_CAT,
+} DATA_PROFILE;
 
 
 typedef struct
@@ -132,6 +146,20 @@ typedef struct
   char shortName[OPERATOR_ALPHANUMERIC_MAX_LENGTH + 1];
 } at_api_curroper;
 
+typedef struct
+{
+  int cid;
+  char *pdp_type;
+  char *apn;
+  char *address;
+} at_api_pdpcontexinfo;
+
+typedef struct
+{
+  PDP_TYPE pdpType;
+  char *apn;
+  DATA_PROFILE profile_type;
+} at_api_setupdatacallreq;
 
 
 int set_radiopower(int clientfd, bool on);
@@ -147,4 +175,9 @@ int get_version(int clientfd, at_api_version *pversion);
 int set_singalstrengthindicationstatus(int clientfd, int status);
 int get_simstatus(int clientfd, SIM_STATUS *pstatus);
 int get_currentoper(int clientfd, at_api_curroper *pcurroper);
+int get_pdpcontextinfolist(int clientfd, at_api_pdpcontexinfo ***ppdpcontextinfoarray, int *parraysize);
+void free_pdpcontextinfolist(at_api_pdpcontexinfo **ppdpcontextinfoarray, int arraysize);
+int setup_datacall(int clientfd, at_api_setupdatacallreq *psetupdatacallreq, int *pCid);
+int deactivate_pdpcontext(int clientfd, int cid);
+int send_usat(int clientfd, char *data);
 #endif

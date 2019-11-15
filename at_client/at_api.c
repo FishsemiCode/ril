@@ -527,3 +527,294 @@ clean:
   at_c_response_free(response);
   return ret;
 }
+
+static int parse_pdpcontexstlist(char *line, int *pCid, char **pType, char **pApn, char **pAddress, char **pDns)
+{
+  int err;
+  char *out, *type, *apn, *address;
+
+  type = apn = address = NULL;
+
+  err = at_tok_start(&line);
+  if (err < 0)
+    {
+      goto error;
+    }
+
+  err = at_tok_nextint(&line, pCid);
+  if (err < 0)
+    {
+      goto error;
+    }
+
+  err = at_tok_nextstr(&line, &out);
+  if (err < 0)
+    {
+      goto error;
+    }
+  if (pType != NULL && out[0])
+    {
+      type = strdup(out);
+      *pType = type;
+    }
+
+  err = at_tok_nextstr(&line, &out);
+  if (err < 0)
+    {
+      goto error;
+    }
+  if (pApn != NULL && out[0])
+    {
+      apn = strdup(out);
+      *pApn = apn;
+    }
+
+  err = at_tok_nextstr(&line, &out);
+  if (err < 0)
+    {
+      goto error;
+    }
+  if (pAddress != NULL && out[0])
+    {
+      address = strdup(out);
+      *pAddress = address;
+    }
+  return 0;
+
+error:
+  if (type)
+    {
+      free(type);
+    }
+  if (apn)
+    {
+      free(apn);
+    }
+  if (address)
+    {
+      free(address);
+    }
+  if (pType)
+    {
+      *pType = NULL;
+    }
+  if (pApn)
+    {
+      *pApn = NULL;
+    }
+  if (pAddress)
+    {
+      *pAddress = NULL;
+    }
+  return err;
+}
+
+static at_api_pdpcontexinfo *new_pdpcontextinfo(int cid, char *pdp_type, char *apn, char *address)
+{
+  at_api_pdpcontexinfo *p = (at_api_pdpcontexinfo *)malloc(sizeof(at_api_pdpcontexinfo));
+  p->cid = cid;
+  p->pdp_type = pdp_type;
+  p->apn = apn;
+  p->address = address;
+  return p;
+}
+
+
+int get_pdpcontextinfolist(int clientfd, at_api_pdpcontexinfo ***pppdpcontextinfoarray,
+    int *parraysize)
+{
+  int ret;
+  ATResponse *response = NULL;
+  char **p_cur;
+  int index = 0;
+
+  ret = sendATRequest(clientfd, "AT+CGDCONT?", &response);
+  if (ret < 0 || response->error != NONE_ERROR)
+    {
+      ret = -1;
+      goto clean;
+    }
+
+  *parraysize = 0;
+  p_cur = response->lines;
+  for (; index < response->lineNumber; p_cur++)
+    {
+      int cid;
+      char *pdp_type = NULL, *apn = NULL, *address = NULL;
+      char *line = *p_cur;
+
+      ret = parse_pdpcontexstlist(line, &cid, &pdp_type, &apn, &address, NULL);
+
+      *pppdpcontextinfoarray = (at_api_pdpcontexinfo **)malloc(MAX_DATA_CALLS * sizeof(at_api_pdpcontexinfo *));
+      memset(*pppdpcontextinfoarray, 0x0, MAX_DATA_CALLS * sizeof(at_api_pdpcontexinfo *));
+      if (ret == 0)
+        {
+          (*pppdpcontextinfoarray)[index] = new_pdpcontextinfo(cid, pdp_type, apn, address);
+        }
+      *parraysize = MAX_DATA_CALLS;
+      index++;
+    }
+clean:
+  at_c_response_free(response);
+  return ret;
+}
+
+void free_pdpcontextinfolist(at_api_pdpcontexinfo **ppdpcontextinfoarray,
+    int arraysize)
+{
+  int index = 0;
+  for (; index < arraysize; index++)
+    {
+      if (ppdpcontextinfoarray[index])
+        {
+          if (ppdpcontextinfoarray[index]->pdp_type)
+            {
+              free(ppdpcontextinfoarray[index]->pdp_type);
+            }
+          if (ppdpcontextinfoarray[index]->apn)
+            {
+              free(ppdpcontextinfoarray[index]->apn);
+            }
+          if (ppdpcontextinfoarray[index]->address)
+            {
+              free(ppdpcontextinfoarray[index]->address);
+            }
+        }
+    }
+  if (arraysize > 0)
+    {
+      free(ppdpcontextinfoarray);
+    }
+}
+
+static int definePDPContext(int clientfd, int cid, const char *protocol, const char *apn)
+{
+  int ret;
+  ATResponse *response = NULL;
+  char cmdString[50];
+
+  snprintf(cmdString, sizeof(cmdString), "AT+CGDCONT=%d,\"%s\",\"%s\"", cid, protocol, apn);
+  ret = sendATRequest(clientfd, cmdString, &response);
+  if (ret < 0 || response->error != NONE_ERROR)
+  {
+    ret = -1;
+    goto clean;
+  }
+clean:
+  at_c_response_free(response);
+  return ret;
+}
+
+static int activatePDPContext(int clientfd, int cid)
+{
+  int ret;
+  ATResponse *response = NULL;
+  char cmdString[15];
+
+  snprintf(cmdString, sizeof(cmdString), "AT+CGACT=1,%d", cid);
+  ret = sendATRequest(clientfd, cmdString, &response);
+  if (ret < 0 || response->error != NONE_ERROR)
+  {
+    ret = -1;
+    goto clean;
+  }
+clean:
+  at_c_response_free(response);
+  return ret;
+}
+
+int setup_datacall(int clientfd, at_api_setupdatacallreq *psetupdatacallreq, int *pCid)
+{
+  char *pTypeStr = NULL;
+  int ret;
+  int cid = 1;
+  switch(psetupdatacallreq->pdpType)
+    {
+    case PDP_TYPE_IP:
+      pTypeStr = "IP";
+      break;
+    case PDP_TYPE_IPV6:
+      pTypeStr = "IPV6";
+      break;
+    case PDP_TYPE_IPV4V6:
+      pTypeStr = "IPV4V6";
+      break;
+    default:
+      pTypeStr = "UNKNOWN";
+      syslog(LOG_ERR, "%s, invalid pdp type:%d\n", __func__, psetupdatacallreq->pdpType);
+      return -1;
+    }
+  if (psetupdatacallreq->profile_type == DATA_PROFILE_CAT)
+    {
+      cid = 2;
+    }
+  ret = definePDPContext(clientfd, cid, pTypeStr, psetupdatacallreq->apn);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "%s, define pdp context error\n", __func__);
+      return -1;
+    }
+
+  ret = activatePDPContext(clientfd, cid);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "%s, active pdp context error\n", __func__);
+      return -1;
+    }
+  *pCid = cid;
+  return ret;
+}
+
+int deactivate_pdpcontext(int clientfd, int cid)
+{
+  int ret;
+  ATResponse *response = NULL;
+  char cmdString[15];
+
+  snprintf(cmdString, sizeof(cmdString), "AT+CGACT=0,%d", cid);
+  ret = sendATRequest(clientfd, cmdString, &response);
+  if (ret < 0 || response->error != NONE_ERROR)
+  {
+    ret = -1;
+    goto clean;
+  }
+  at_c_response_free(response);
+  snprintf(cmdString, sizeof(cmdString), "AT+CGDCONT=%d", cid);
+  ret = sendATRequest(clientfd, cmdString, &response);
+  if (ret < 0 || response->error != NONE_ERROR)
+  {
+    ret = -1;
+    goto clean;
+  }
+clean:
+  at_c_response_free(response);
+  return ret;
+}
+
+int send_usat(int clientfd, char *data)
+{
+  ATResponse *response = NULL;
+  int ret;
+  char *buf;
+  int len;
+  if (data == NULL)
+    {
+      syslog(LOG_ERR, "%s: invalid param\n",  __func__);
+      return -1;
+    }
+  len = strlen(data);
+  buf = malloc(15 + len);
+  memset(buf, 0x0, 15 + len);
+  sprintf(buf, "AT+CSIM=%d,%s", len / 2, data);
+  ret = sendATRequest(clientfd, buf, &response);
+
+  if (ret < 0 || response->error != NONE_ERROR)
+    {
+      ret = 0;
+      goto clean;
+    }
+clean:
+  at_c_response_free(response);
+  free(buf);
+  return ret;
+}

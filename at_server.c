@@ -55,7 +55,7 @@
 #include <nuttx/misc/misc_rpmsg.h>
 #include "at_client/at_log.h"
 
-#define MAX_AT_SIZE   255
+#define MAX_AT_SIZE   600
 #define TIMEOUT_DEFALUT (20 * 1000)
 #define AT_COMMAND_TIMEOUT (20 * 1000)
 
@@ -166,6 +166,11 @@ static const atcmd_table_s g_atcmd[] =
   {"AT^SIMST", "^SIMST",  SINGLELINE, ATSERVER_UART_MODEM},
   {"AT+COPS=", NULL,   NO_RESULT, ATSERVER_UART_MODEM},
   {"AT+COPS?", "+COPS",   SINGLELINE, ATSERVER_UART_MODEM},
+  {"AT+CGDCONT?", "+CGDCONT",   MULTILINE, ATSERVER_UART_MODEM},
+  {"AT+CGDCONT=", NULL,   NO_RESULT, ATSERVER_UART_MODEM},
+  {"AT+CGDATA=", NULL,   NO_RESULT, ATSERVER_UART_MODEM},
+  {"AT+CGACT=", NULL,   NO_RESULT, ATSERVER_UART_MODEM},
+  {"AT+CSIM=", NULL,   NO_RESULT, ATSERVER_UART_MODEM},
 };
 
 ATUartS gATUarts[ATSERVER_NUARTS];
@@ -617,7 +622,6 @@ void processCommandBuffer(ATClient *pATClient, void *buffer, size_t buflen)
           free(gModemReadycond);
         }
     }
-
   rillog(LOG_INFO, "%s Client %d processCommandBuffer: process cmd=%s, prefix=%s, index=%d\n",
     LOG_TAG, pATClient->mToken, cmd, prefix, uartIndex);
   error = sendATcommand(cmd, atCmdType, prefix, &p_response, gATUarts + uartIndex);
@@ -969,6 +973,7 @@ void handleUnsolicited(const char *s)
       pthread_cond_signal(gModemReadycond);
       pthread_mutex_unlock(gModemReadymutex);
     }
+
   rillog(LOG_INFO, "%s ATServer client count:%d\n", LOG_TAG, sq_count(&(gServer->mClients)));
   pthread_mutex_lock(&(gServer->mClientsLock));
   for (atClient = (ATClient*)(gServer->mClients.head);

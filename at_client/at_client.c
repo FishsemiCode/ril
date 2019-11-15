@@ -55,7 +55,7 @@
 
 static const char *SOCK_NAME = "/dev/atil";
 
-#define MAX_MSG_LENGTH 255
+#define MAX_MSG_LENGTH 600
 #define MAX_RETRY_NUM 5
 #define LOG_TAG "at_client"
 
