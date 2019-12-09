@@ -628,6 +628,8 @@ int get_pdpcontextinfolist(int clientfd, at_api_pdpcontexinfo ***pppdpcontextinf
   char **p_cur;
   int index = 0;
 
+  *parraysize = 0;
+
   ret = sendATRequest(clientfd, "AT+CGDCONT?", &response);
   if (ret < 0 || response->error != NONE_ERROR)
     {
@@ -635,7 +637,6 @@ int get_pdpcontextinfolist(int clientfd, at_api_pdpcontexinfo ***pppdpcontextinf
       goto clean;
     }
 
-  *parraysize = 0;
   p_cur = response->lines;
   for (; index < response->lineNumber; p_cur++)
     {
@@ -651,7 +652,7 @@ int get_pdpcontextinfolist(int clientfd, at_api_pdpcontexinfo ***pppdpcontextinf
         {
           (*pppdpcontextinfoarray)[index] = new_pdpcontextinfo(cid, pdp_type, apn, address);
         }
-      *parraysize = MAX_DATA_CALLS;
+      *parraysize = (*parraysize + 1);
       index++;
     }
 clean:
@@ -810,11 +811,50 @@ int send_usat(int clientfd, char *data)
 
   if (ret < 0 || response->error != NONE_ERROR)
     {
-      ret = 0;
+      ret = -1;
       goto clean;
     }
 clean:
   at_c_response_free(response);
   free(buf);
+  return ret;
+}
+
+
+int release_signalconnection(int clientfd)
+{
+  int ret;
+  at_api_pdpcontexinfo **ppdpcontextinfoarray = NULL;
+  int size = 0;
+  int index;
+  ATResponse *response = NULL;
+  char buf[20];
+  ret = get_pdpcontextinfolist(clientfd, &ppdpcontextinfoarray, &size);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "%s: get pdp context info list error\n", __func__);
+      free_pdpcontextinfolist(ppdpcontextinfoarray, size);
+      return ret;
+    }
+  for (index = 0; index < size; index++)
+    {
+      if (ppdpcontextinfoarray[index] &&
+        ppdpcontextinfoarray[index]->address != NULL &&
+        ppdpcontextinfoarray[index]->address[0] != '\0')
+        {
+          sprintf(buf, "AT+CSODCP=%d,0,\"\",1", ppdpcontextinfoarray[index]->cid);
+          ret = sendATRequest(clientfd, buf, &response);
+          if (ret < 0 || response->error != NONE_ERROR)
+            {
+              ret = -1;
+              goto clean;
+            }
+          at_c_response_free(response);
+          response = NULL;
+        }
+    }
+clean:
+  free_pdpcontextinfolist(ppdpcontextinfoarray, size);
+  at_c_response_free(response);
   return ret;
 }

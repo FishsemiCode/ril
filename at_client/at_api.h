@@ -180,4 +180,5 @@ void free_pdpcontextinfolist(at_api_pdpcontexinfo **ppdpcontextinfoarray, int ar
 int setup_datacall(int clientfd, at_api_setupdatacallreq *psetupdatacallreq, int *pCid);
 int deactivate_pdpcontext(int clientfd, int cid);
 int send_usat(int clientfd, char *data);
+int release_signalconnection(int clientfd);
 #endif
