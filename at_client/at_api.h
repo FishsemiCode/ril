@@ -181,4 +181,5 @@ int setup_datacall(int clientfd, at_api_setupdatacallreq *psetupdatacallreq, int
 int deactivate_pdpcontext(int clientfd, int cid);
 int send_usat(int clientfd, char *data);
 int release_signalconnection(int clientfd);
+int request_simrefresh(int clientfd);
 #endif

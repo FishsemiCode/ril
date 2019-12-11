@@ -858,3 +858,20 @@ clean:
   at_c_response_free(response);
   return ret;
 }
+
+int request_simrefresh(int clientfd)
+{
+  ATResponse *response = NULL;
+  int ret;
+
+  ret = sendATRequest(clientfd, "AT+NUSATRSH=1", &response);
+
+  if (ret < 0 || response->error != NONE_ERROR)
+    {
+      ret = -1;
+      goto clean;
+    }
+clean:
+  at_c_response_free(response);
+  return ret;
+}
