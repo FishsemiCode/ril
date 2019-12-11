@@ -520,7 +520,7 @@ int writeUntil(const void *buffer, size_t len, int fd)
 }
 
 
-int sendResponse(int fd, bool success, const void *data, char size, char type, char lineNumber)
+int sendResponse(int fd, bool success, const void *data, uint16_t size, char type, char lineNumber)
 {
   int ret = writeUntil((void *)&size, sizeof(size), fd);
   if(ret < 0)

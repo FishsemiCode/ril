@@ -322,8 +322,7 @@ static int readATResponse(int fd, char *buffer)
   int count;
   size_t msgLen;
   char *p = buffer;
-  int remain = 1;
-
+  int remain = 2;
   do
     {
       do
@@ -338,7 +337,7 @@ static int readATResponse(int fd, char *buffer)
       remain -= count;
     } while (remain > 0);
 
-  msgLen = buffer[0];
+  msgLen = (buffer[1] << 8) + buffer[0];
   if (msgLen > MAX_MSG_LENGTH)
     {
       rillog(LOG_ERR, "%s %s: message is too long, truncate it!", LOG_TAG, __func__);
