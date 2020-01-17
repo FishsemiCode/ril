@@ -53,6 +53,8 @@
 #include <arpa/inet.h>
 #include <sys/ioctl.h>
 #include <nuttx/misc/misc_rpmsg.h>
+#include <nuttx/board.h>
+
 #include "at_client/at_log.h"
 
 #define MAX_AT_SIZE   600
@@ -79,6 +81,8 @@
 
 #define NUM_ELEMS(x) (sizeof(x) / sizeof(x[0]))
 #define LOG_TAG "at_server"
+
+#define GPS_MAX_DURATION_TIME (10392)  //2.92h minus 2min
 
 typedef struct
 {
@@ -180,6 +184,76 @@ ATServer *gServer;
 pthread_mutex_t *gModemReadymutex = NULL;
 pthread_cond_t *gModemReadycond = NULL;
 static bool gModemReady = false;
+
+static timer_t gGpsTimerid = NULL;
+static int gGpsTimeoutPipe[2];
+static int gIndicationDisable = false;
+static int gGpsStart = false;
+static struct file gGpsPipeFileWrite;
+
+
+#ifdef CONFIG_CAN_PASS_STRUCTS
+static void gpsDurationTimeout(union sigval value)
+#else
+static void gpsDurationTimeout(FAR void *sival_ptr)
+#endif
+{
+#ifdef CONFIG_CAN_PASS_STRUCTS
+  int sival_int = value.sival_int;
+#else
+  int sival_int = (int)((intptr_t)sival_ptr);
+#endif
+
+  int ret = file_write(&gGpsPipeFileWrite, " ", 1);
+  rillog(LOG_INFO, "%s %s write:%d,%d,%d\n", LOG_TAG, __func__, ret, errno, sival_int);
+}
+
+
+static void stopGpsDurationTime(void)
+{
+  if (gGpsTimerid)
+    {
+      timer_delete(gGpsTimerid);
+      gGpsTimerid = NULL;
+    }
+  rillog(LOG_INFO, "%s %s\n", LOG_TAG, __func__);
+}
+
+
+static int startGpsDurationTime(void)
+{
+  int ret = OK;
+  if (!gGpsTimerid)
+    {
+      struct sigevent notify;
+      struct itimerspec timer;
+      notify.sigev_notify            = SIGEV_THREAD;
+      notify.sigev_signo             = 0;
+      notify.sigev_value.sival_int   = 0;
+      notify.sigev_notify_function   = gpsDurationTimeout;
+      notify.sigev_notify_attributes = NULL;
+
+      ret = timer_create(CLOCK_REALTIME, &notify, &gGpsTimerid);
+      if (ret != OK)
+        {
+          rillog(LOG_ERR, "%s %s: timer_create failed, errno=%d\n", LOG_TAG, __func__, errno);
+          return ret;
+        }
+      timer.it_value.tv_sec     = GPS_MAX_DURATION_TIME;
+      timer.it_value.tv_nsec    = 0;
+      timer.it_interval.tv_sec  = GPS_MAX_DURATION_TIME;
+      timer.it_interval.tv_nsec = 0;
+
+      ret = timer_settime(gGpsTimerid, 0, &timer, NULL);
+      if (ret != OK)
+        {
+          rillog(LOG_ERR, "%s %s: timer_settime failed, errno=%d\n", LOG_TAG, __func__, errno);
+          stopGpsDurationTime();
+        }
+      rillog(LOG_INFO, "%s %s\n", LOG_TAG, __func__);
+    }
+  return ret;
+}
 
 
 
@@ -603,6 +677,23 @@ void processCommandBuffer(ATClient *pATClient, void *buffer, size_t buflen)
       rillog(LOG_ERR, "%s Command : %s not supported\n", LOG_TAG, cmd);
       return;
     }
+  if (uartIndex == ATSERVER_UART_GPS)
+    {
+      if (strstr(cmd, "START"))
+        {
+          gGpsStart = true;
+        }
+      else
+        {
+          gGpsStart = false;
+        }
+      startGpsDurationTime();
+    }
+  else if (uartIndex != ATSERVER_UART_GPS)
+    {
+      stopGpsDurationTime();
+      gGpsStart = false;
+    }
   if (!gModemReady)
     {
       wakeup_cp();
@@ -662,6 +753,85 @@ void processCommandBuffer(ATClient *pATClient, void *buffer, size_t buflen)
     }
   pthread_mutex_unlock(&(gServer->mClientsLock));
   at_response_free(p_response);
+}
+
+static void processGpsDurationTimeout(void)
+{
+  int ret;
+  ATResponse *p_response = NULL;
+  ATCommandType atCmdType;
+  char* prefix;
+  int uartIndex;
+
+  rillog(LOG_INFO, "%s %s\n", LOG_TAG, __func__);
+
+  gIndicationDisable = true;
+
+  char* cmd = (char*)"AT+PGNSS+$STOP";
+  if (findATcmdTypeAndPrefix(cmd, &prefix, &atCmdType, &uartIndex) == 0)
+    {
+      rillog(LOG_ERR, "%s %s Command : %s not supported\n", LOG_TAG, __func__, cmd);
+      goto error;
+    }
+  ret = sendATcommand(cmd, atCmdType, prefix, &p_response, gATUarts + uartIndex);
+  at_response_free(p_response);
+
+  if (ret)
+    {
+      goto error;
+    }
+
+  cmd = (char*)"AT+CFUN=1";
+  if (findATcmdTypeAndPrefix(cmd, &prefix, &atCmdType, &uartIndex) == 0)
+    {
+      rillog(LOG_ERR, "%s %s Command : %s not supported\n", LOG_TAG, __func__, cmd);
+      goto error;
+    }
+  ret = sendATcommand(cmd, atCmdType, prefix, &p_response, gATUarts + uartIndex);
+  at_response_free(p_response);
+
+  if (ret)
+    {
+      goto error;
+    }
+
+  cmd = (char*)"AT+CFUN=0";
+  if (findATcmdTypeAndPrefix(cmd, &prefix, &atCmdType, &uartIndex) == 0)
+    {
+      rillog(LOG_ERR, "%s %s Command : %s not supported\n", LOG_TAG, __func__, cmd);
+      goto error;
+    }
+  ret = sendATcommand(cmd, atCmdType, prefix, &p_response, gATUarts + uartIndex);
+  at_response_free(p_response);
+
+  if (ret)
+    {
+      goto error;
+    }
+
+  gIndicationDisable = false;
+
+  if (gGpsStart)
+    {
+      gGpsStart = false;
+      cmd = (char*)"AT+PGNSS+$START";
+      if (findATcmdTypeAndPrefix(cmd, &prefix, &atCmdType, &uartIndex) == 0)
+        {
+          rillog(LOG_ERR, "%s %s Command : %s not supported\n", LOG_TAG, __func__, cmd);
+          goto error;
+        }
+      ret = sendATcommand(cmd, atCmdType, prefix, &p_response, gATUarts + uartIndex);
+      at_response_free(p_response);
+      if (ret)
+        {
+          goto error;
+        }
+    }
+  return;
+error:
+  rillog(LOG_ERR, "%s %s : error happen!!!!!!!\n", LOG_TAG, __func__);
+  board_reset(0);
+  return;
 }
 
 
@@ -724,6 +894,11 @@ void run(ATServer *pATServer)
       FD_ZERO(&read_fds);
       max = pATServer->mSock;
       FD_SET(pATServer->mSock, &read_fds);
+      FD_SET(gGpsTimeoutPipe[0], &read_fds);
+      if (gGpsTimeoutPipe[0] > max)
+        {
+          max = gGpsTimeoutPipe[0];
+        }
       pthread_mutex_lock(&(pATServer->mClientsLock));
       for (atClient = (ATClient*)(pATServer->mClients.head);
             atClient;
@@ -779,6 +954,13 @@ void run(ATServer *pATServer)
           pthread_mutex_lock(&(pATServer->mClientsLock));
           sq_addlast(&(atClient->mClientLcNode), &(pATServer->mClients));
           pthread_mutex_unlock(&(pATServer->mClientsLock));
+        }
+      if (FD_ISSET(gGpsTimeoutPipe[0], &read_fds))
+        {
+          char c;
+          rillog(LOG_INFO, "%s gps duraion time out\n", LOG_TAG);
+          read(gGpsTimeoutPipe[0], &c, 1);
+          processGpsDurationTimeout();
         }
       pthread_mutex_lock(&(pATServer->mClientsLock));
       atClient = (ATClient*)(pATServer->mClients.head);
@@ -975,16 +1157,19 @@ void handleUnsolicited(const char *s)
       pthread_mutex_unlock(gModemReadymutex);
     }
 
-  rillog(LOG_INFO, "%s ATServer client count:%d\n", LOG_TAG, sq_count(&(gServer->mClients)));
-  pthread_mutex_lock(&(gServer->mClientsLock));
-  for (atClient = (ATClient*)(gServer->mClients.head);
-        atClient;
-        atClient = (ATClient*)sq_next(&(atClient->mClientLcNode)))
+  if (!gIndicationDisable)
     {
-      rillog(LOG_INFO, "%s %s send %d %s\n", LOG_TAG, __func__, atClient->mfd, s);
-      sendResponse(atClient->mfd, true, s, strlen(s)+ 1, AT_RESPONSE_TYPE_UNSOLICITED, 1);
+      rillog(LOG_INFO, "%s ATServer client count:%d\n", LOG_TAG, sq_count(&(gServer->mClients)));
+      pthread_mutex_lock(&(gServer->mClientsLock));
+      for (atClient = (ATClient*)(gServer->mClients.head);
+            atClient;
+            atClient = (ATClient*)sq_next(&(atClient->mClientLcNode)))
+        {
+          rillog(LOG_INFO, "%s %s send %d %s\n", LOG_TAG, __func__, atClient->mfd, s);
+          sendResponse(atClient->mfd, true, s, strlen(s)+ 1, AT_RESPONSE_TYPE_UNSOLICITED, 1);
+        }
+      pthread_mutex_unlock(&(gServer->mClientsLock));
     }
-  pthread_mutex_unlock(&(gServer->mClientsLock));
 }
 
 
@@ -1151,6 +1336,7 @@ void *reader_loop(void *obj)
 static int ril_daemon(int argc, char *argv[])
 {
   int i;
+
   rillog(LOG_INFO, "%s %s: ril_daemon running\n", LOG_TAG, __func__);
   for (i = 0; i < ATSERVER_NUARTS; i++)
     {
@@ -1168,14 +1354,34 @@ static int ril_daemon(int argc, char *argv[])
   pthread_cond_init(gModemReadycond, NULL);
   gServer = (ATServer *)malloc(sizeof(ATServer));
   ATServer_initialize(gServer, "/dev/atil");
+
+  if (pipe(gGpsTimeoutPipe))
+    {
+      rillog(LOG_ERR, "%s %s: pipe (%s)\n", LOG_TAG, __func__, strerror(errno));
+      goto clean;
+    }
+  file_detach(gGpsTimeoutPipe[1], &gGpsPipeFileWrite);
+  gGpsTimeoutPipe[1] = -1;
+
   if (pthread_create(NULL, NULL, reader_loop, NULL))
     {
       rillog(LOG_ERR, "%s %s: pthread_create (%s)\n", LOG_TAG, __func__, strerror(errno));
       goto clean;
     }
+
+
   ATServerRun();
 
 clean:
+  if (gGpsTimeoutPipe[0] > 0)
+    {
+      close(gGpsTimeoutPipe[0]);
+    }
+  if (gGpsTimeoutPipe[1] > 0)
+    {
+      close(gGpsTimeoutPipe[1]);
+    }
+  file_close(&gGpsPipeFileWrite);
   for (i = 0; i < ATSERVER_NUARTS; i++)
     {
       if (gATUarts[i].mfd > 0)
