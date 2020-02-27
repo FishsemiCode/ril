@@ -182,4 +182,6 @@ int deactivate_pdpcontext(int clientfd, int cid);
 int send_usat(int clientfd, char *data);
 int release_signalconnection(int clientfd);
 int request_simrefresh(int clientfd);
+int get_vbat(int clientfd, int *vbat);
+
 #endif

@@ -564,6 +564,29 @@ int findATcmdTypeAndPrefix(char *pCmd, char **ppPrefix, ATCommandType *pAtCmdTyp
   return 0;
 }
 
+static char *findVbatCmd(char *pCmd, char **ppPrefix, ATCommandType *pAtCmdType, int *pUartIndex)
+{
+  char *cmd = NULL;
+  if (strStartsWith(pCmd, "AT+VBAT"))
+    {
+      *pAtCmdType = SINGLELINE;
+      if (gGpsStart)
+        {
+          cmd = "AT+PGNSS+$VBAT";
+          *ppPrefix = "$VBAT";
+          *pUartIndex = ATSERVER_UART_GPS;
+        }
+      else
+        {
+          cmd = "AT+VBAT?";
+          *ppPrefix = "+VBAT";
+          *pUartIndex = ATSERVER_UART_MODEM;
+        }
+    }
+
+  return cmd;
+}
+
 int writeUntil(const void *buffer, size_t len, int fd)
 {
   size_t offset = 0;
@@ -671,20 +694,26 @@ void processCommandBuffer(ATClient *pATClient, void *buffer, size_t buflen)
   char *pStrResponse = NULL;
   char responseLen = 0;
   int uartIndex;
+  char* cmd;
 
-  char* cmd = (char*)buffer;
-  if (findATcmdTypeAndPrefix(cmd, &prefix, &atCmdType, &uartIndex) == 0)
+  cmd = findVbatCmd((char*)buffer, &prefix, &atCmdType, &uartIndex);
+  if (cmd == NULL)
     {
-      rillog(LOG_ERR, "%s Command : %s not supported\n", LOG_TAG, cmd);
-      return;
+      cmd = (char*)buffer;
+      if (findATcmdTypeAndPrefix(cmd, &prefix, &atCmdType, &uartIndex) == 0)
+      {
+        rillog(LOG_ERR, "%s Command : %s not supported\n", LOG_TAG, cmd);
+        return;
+      }
     }
+
   if (uartIndex == ATSERVER_UART_GPS)
     {
       if (strstr(cmd, "START"))
         {
           gGpsStart = true;
         }
-      else
+      else if (strstr(cmd, "STOP"))
         {
           gGpsStart = false;
         }
@@ -693,7 +722,6 @@ void processCommandBuffer(ATClient *pATClient, void *buffer, size_t buflen)
   else if (uartIndex != ATSERVER_UART_GPS)
     {
       stopGpsDurationTime();
-      gGpsStart = false;
     }
   if (!gModemReady)
     {
@@ -814,7 +842,6 @@ static void processGpsDurationTimeout(void)
 
   if (gGpsStart)
     {
-      gGpsStart = false;
       cmd = (char*)"AT+PGNSS+$START";
       if (findATcmdTypeAndPrefix(cmd, &prefix, &atCmdType, &uartIndex) == 0)
         {

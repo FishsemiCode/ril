@@ -875,3 +875,33 @@ clean:
   at_c_response_free(response);
   return ret;
 }
+
+int get_vbat(int clientfd, int *vbat)
+{
+  ATResponse *response = NULL;
+  int ret;
+  char *line, *p;
+  memset(vbat, 0x0, sizeof(int));
+  ret = sendATRequest(clientfd, "AT+VBAT?", &response);
+  if (ret < 0 || response->error != NONE_ERROR)
+    {
+      ret = -1;
+      goto clean;
+    }
+  line = response->lines[0];
+  ret = at_tok_start(&line);
+  if (ret < 0)
+    {
+      goto clean;
+    }
+  ret = at_tok_nextstr(&line, &p);
+  if (ret < 0)
+    {
+      goto clean;
+    }
+  *vbat = atoi(p);
+  ret = 0;
+clean:
+  at_c_response_free(response);
+  return ret;
+}
