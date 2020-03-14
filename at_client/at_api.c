@@ -876,13 +876,16 @@ clean:
   return ret;
 }
 
-int get_vbat(int clientfd, int *vbat)
+int get_vbat(int clientfd, int port, int *vbat)
 {
   ATResponse *response = NULL;
   int ret;
   char *line, *p;
+  char buf[20];
+
   memset(vbat, 0x0, sizeof(int));
-  ret = sendATRequest(clientfd, "AT+VBAT?", &response);
+  snprintf(buf, sizeof(buf), "AT+VBAT=%d", port);
+  ret = sendATRequest(clientfd, buf, &response);
   if (ret < 0 || response->error != NONE_ERROR)
     {
       ret = -1;

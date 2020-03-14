@@ -273,6 +273,21 @@ static char * findNextEOL(char *cur)
   return *cur == '\0' ? NULL : cur;
 }
 
+static int findInt(char *cur)
+{
+  int num = 0;
+  while (*cur != '\0' && *cur != '\r' && *cur != '\n')
+    {
+      if ((*cur >= '0') && (*cur <= '9'))
+        {
+          num = num * 10 + *cur - '0';
+        }
+      cur++;
+    }
+
+  return num;
+}
+
 static int strStartsWith(const char *line, const char *prefix)
 {
   for (; *line != '\0' && *prefix != '\0'; line++, prefix++)
@@ -564,27 +579,28 @@ int findATcmdTypeAndPrefix(char *pCmd, char **ppPrefix, ATCommandType *pAtCmdTyp
   return 0;
 }
 
-static char *findVbatCmd(char *pCmd, char **ppPrefix, ATCommandType *pAtCmdType, int *pUartIndex)
+static bool findVbatCmd(char *pCmd, char **ppPrefix, ATCommandType *pAtCmdType, int *pUartIndex)
 {
-  char *cmd = NULL;
   if (strStartsWith(pCmd, "AT+VBAT"))
     {
       *pAtCmdType = SINGLELINE;
       if (gGpsStart)
         {
-          cmd = "AT+PGNSS+$VBAT";
+          int port = findInt(pCmd);
+          sprintf(pCmd, "AT+PGNSS+$VBAT,%d", port);
           *ppPrefix = "$VBAT";
           *pUartIndex = ATSERVER_UART_GPS;
         }
       else
         {
-          cmd = "AT+VBAT?";
           *ppPrefix = "+VBAT";
           *pUartIndex = ATSERVER_UART_MODEM;
         }
+
+      return TRUE;
     }
 
-  return cmd;
+  return FALSE;
 }
 
 int writeUntil(const void *buffer, size_t len, int fd)
@@ -696,10 +712,9 @@ void processCommandBuffer(ATClient *pATClient, void *buffer, size_t buflen)
   int uartIndex;
   char* cmd;
 
-  cmd = findVbatCmd((char*)buffer, &prefix, &atCmdType, &uartIndex);
-  if (cmd == NULL)
+  cmd = (char*)buffer;
+  if (!findVbatCmd(cmd, &prefix, &atCmdType, &uartIndex))
     {
-      cmd = (char*)buffer;
       if (findATcmdTypeAndPrefix(cmd, &prefix, &atCmdType, &uartIndex) == 0)
       {
         rillog(LOG_ERR, "%s Command : %s not supported\n", LOG_TAG, cmd);
