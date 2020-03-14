@@ -305,11 +305,18 @@ clean:
   return ret;
 }
 
-int start_gps(int clientfd)
+int start_gps(int clientfd, bool bColdStart)
 {
   ATResponse *response = NULL;
   int ret;
-  ret = sendATRequest(clientfd, "AT+PGNSS+$START", &response);
+  if (!bColdStart)
+    {
+      ret = sendATRequest(clientfd, "AT+PGNSS+$START", &response);
+    }
+  else
+    {
+      ret = sendATRequest(clientfd, "AT+PGNSS+$START,1", &response);
+    }
   if (ret < 0 || response->error != NONE_ERROR)
     {
       ret = -1;

@@ -167,7 +167,7 @@ int get_imei(int clientfd, at_spi_imei *pimei);
 int get_imsi(int clientfd, at_api_imsi *pimsi);
 int set_ceregindicationstatus(int clientfd, int status);
 int get_cellinfo(int clientfd, at_api_cellinfo *pcellinfo);
-int start_gps(int clientfd);
+int start_gps(int clientfd, bool bColdStart);
 int stop_gps(int clientfd);
 int get_iccid(int clientfd, at_spi_iccid *piccid);
 int get_model(int clientfd, at_spi_model *pmodel);
