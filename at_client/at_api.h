@@ -121,6 +121,13 @@ typedef enum
   DATA_PROFILE_CAT,
 } DATA_PROFILE;
 
+typedef enum
+{
+  PGNSS_MODE_GPS = 0,
+  PGNSS_MODE_BEIDOU,
+} PGNSS_MODE;
+
+
 
 typedef struct
 {
@@ -183,5 +190,5 @@ int send_usat(int clientfd, char *data);
 int release_signalconnection(int clientfd);
 int request_simrefresh(int clientfd);
 int get_vbat(int clientfd, int port, int *vbat);
-
+int pgnss_cfg(int clientfd, PGNSS_MODE mode);
 #endif

@@ -915,3 +915,22 @@ clean:
   at_c_response_free(response);
   return ret;
 }
+
+int pgnss_cfg(int clientfd, PGNSS_MODE mode)
+{
+  ATResponse *response = NULL;
+  int ret;
+  char buf[20];
+
+  snprintf(buf, sizeof(buf), "AT+PGNSS+$CFGSYS,%d", mode);
+  ret = sendATRequest(clientfd, buf, &response);
+  if (ret < 0 || response->error != NONE_ERROR)
+    {
+      ret = -1;
+      goto clean;
+    }
+  ret = 0;
+clean:
+  at_c_response_free(response);
+  return ret;
+}
