@@ -35,5 +35,5 @@
 ############################################################################
 
 ifeq ($(CONFIG_SERVICES_RIL),y)
-CONFIGURED_APPS += external/services/ril
+CONFIGURED_APPS += $(APPDIR)/external/services/ril
 endif
