@@ -109,6 +109,15 @@ typedef enum
 
 typedef enum
 {
+  NBRADIO_STATUS_UNKNOWN = -1,
+  NBRADIO_STATUS_OFF,
+  NBRADIO_STATUS_ON,
+  NBRADIO_STATUS_AIRPLANE = 4,
+} NBRADIO_STATUS;
+
+
+typedef enum
+{
   PDP_TYPE_UNSUPPORTED = 0,
   PDP_TYPE_IP = 1 << 0,
   PDP_TYPE_IPV6 = 1 << 1,
@@ -181,6 +190,7 @@ int get_model(int clientfd, at_spi_model *pmodel);
 int get_version(int clientfd, at_api_version *pversion);
 int set_singalstrengthindicationstatus(int clientfd, int status);
 int get_simstatus(int clientfd, SIM_STATUS *pstatus);
+int get_nbradiostatus(int clientfd, NBRADIO_STATUS *pstatus);
 int get_currentoper(int clientfd, at_api_curroper *pcurroper);
 int get_pdpcontextinfolist(int clientfd, at_api_pdpcontexinfo ***ppdpcontextinfoarray, int *parraysize);
 void free_pdpcontextinfolist(at_api_pdpcontexinfo **ppdpcontextinfoarray, int arraysize);

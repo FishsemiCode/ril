@@ -466,6 +466,37 @@ clean:
   return ret;
 }
 
+int get_nbradiostatus(int clientfd, NBRADIO_STATUS *pstatus)
+{
+  ATResponse *response = NULL;
+  int ret = -1;
+  char *line;
+  int value;
+  *pstatus = NBRADIO_STATUS_UNKNOWN;
+  ret = sendATRequest(clientfd, "AT+CFUN?", &response);
+  if (ret < 0 || response->error != NONE_ERROR)
+    {
+      ret = -1;
+      goto clean;
+    }
+  line = response->lines[0];
+  ret = at_tok_start(&line);
+  if (ret < 0)
+    {
+      goto clean;
+    }
+  ret = at_tok_nextint(&line, &value);
+  if (ret < 0)
+    {
+      goto clean;
+    }
+  *pstatus = value;
+
+clean:
+  at_c_response_free(response);
+  return ret;
+}
+
 int get_currentoper(int clientfd, at_api_curroper *pcurroper)
 {
   ATResponse *response = NULL;
