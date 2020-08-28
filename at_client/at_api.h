@@ -145,7 +145,7 @@ typedef struct
   CURR_MODE curr_mod;
   DUPLEX_MODE duplex_mode;
   int ue_category;
-  unsigned short cellId;
+  unsigned int cellId;
   unsigned int lacId;
   int rsrp;
   short rsrq;
