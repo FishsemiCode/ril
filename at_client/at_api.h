@@ -201,4 +201,5 @@ int release_signalconnection(int clientfd);
 int request_simrefresh(int clientfd);
 int get_vbat(int clientfd, int port, int *vbat);
 int pgnss_cfg(int clientfd, PGNSS_MODE mode);
+int get_rfsleep_remain_time(int clientfd, unsigned int *remain_ms);
 #endif

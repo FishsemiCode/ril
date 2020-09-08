@@ -965,3 +965,36 @@ clean:
   at_c_response_free(response);
   return ret;
 }
+
+int get_rfsleep_remain_time(int clientfd, unsigned int *remain_ms)
+{
+  ATResponse *response = NULL;
+  int ret;
+  char *line, *p;
+  char buf[20];
+
+  memset(remain_ms, 0x0, sizeof(unsigned int));
+  snprintf(buf, sizeof(buf), "AT+WRQRY?");
+  ret = sendATRequest(clientfd, buf, &response);
+  if (ret < 0 || response->error != NONE_ERROR)
+    {
+      ret = -1;
+      goto clean;
+    }
+  line = response->lines[0];
+  ret = at_tok_start(&line);
+  if (ret < 0)
+    {
+      goto clean;
+    }
+  ret = at_tok_nextstr(&line, &p);
+  if (ret < 0)
+    {
+      goto clean;
+    }
+  *remain_ms = (unsigned int)atol(p);
+  ret = 0;
+clean:
+  at_c_response_free(response);
+  return ret;
+}
