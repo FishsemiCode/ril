@@ -368,11 +368,11 @@ int deregister_indication(int clientid, const char *s)
       if (atIndicationReg->clientid == clientid &&
           strcmp(atIndicationReg->prefix, s) == 0)
         {
-          atIndicationReg_next = (ATIndicationReg*)sq_next(&(atIndicationReg->sqNode));
           sq_rem(&(atIndicationReg->sqNode), &gATIndicationRegs);
-          atIndicationReg = atIndicationReg_next;
           break;
         }
+      atIndicationReg_next = (ATIndicationReg*)sq_next(&(atIndicationReg->sqNode));
+      atIndicationReg = atIndicationReg_next;
     }
   pthread_mutex_unlock(&ATIndicationRegListMutex);
   return ret;
