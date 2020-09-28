@@ -233,7 +233,7 @@ static int startGpsDurationTime(void)
       notify.sigev_notify            = SIGEV_THREAD;
       notify.sigev_signo             = 0;
       notify.sigev_value.sival_int   = 0;
-      notify.sigev_notify_function   = gpsDurationTimeout;
+      notify.sigev_notify_function   = (void *)gpsDurationTimeout;
       notify.sigev_notify_attributes = NULL;
 
       ret = timer_create(CLOCK_REALTIME, &notify, &gGpsTimerid);
