@@ -998,3 +998,69 @@ clean:
   at_c_response_free(response);
   return ret;
 }
+
+int set_pwrmaxvalue(int clientfd, int value)
+{
+  ATResponse *response = NULL;
+  int ret;
+  char buf[20] = {0};
+  snprintf(buf, sizeof(buf), "AT+SETPWRMAX=%d", value);
+  ret = sendATRequest(clientfd, buf, &response);
+  if (ret < 0 || response->error != NONE_ERROR)
+    {
+      ret = -1;
+      goto clean;
+    }
+  ret = 0;
+clean:
+  at_c_response_free(response);
+  return ret;
+}
+
+int get_pwrmaxvalue(int clientfd, int *pwrmaxvalue)
+{
+  ATResponse *response = NULL;
+  int ret = -1;
+  char *line, *p;
+  int flag, value;
+  ret = sendATRequest(clientfd, "AT+SETPWRMAX?", &response);
+  if (ret < 0 || response->error != NONE_ERROR)
+    {
+      ret = -1;
+      goto clean;
+    }
+  line = response->lines[0];
+  ret = at_tok_start(&line);
+  if (ret < 0)
+    {
+      goto clean;
+    }
+  //flag
+  ret = at_tok_nextint(&line, &flag);
+  if (ret < 0)
+    {
+      goto clean;
+    }
+
+  //value
+  ret = at_tok_nextstr(&line, &p);
+  if (ret < 0)
+    {
+      goto clean;
+    }
+  ret = at_tok_start(&p);
+  if (ret < 0)
+    {
+      goto clean;
+    }
+  ret = at_tok_nextint(&p, &value);
+  if (ret < 0)
+    {
+      goto clean;
+    }
+  *pwrmaxvalue = value;
+
+clean:
+  at_c_response_free(response);
+  return ret;
+}
