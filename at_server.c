@@ -1192,6 +1192,45 @@ static void handleFinalResponse(const char *line, ATUartS *pAtUarts)
   pthread_cond_signal(&(pAtUarts->mCommandcond));
 }
 
+void setSystemTime(const char *s)
+{
+  if(s == NULL)
+    {
+      rillog(LOG_ERR, "%s s is null, return\n", LOG_TAG);
+      return;
+    }
+  if(strncmp(s, "+CTZE:", 6) != 0)
+    {
+      return;
+    }
+
+  char strinfo[20];
+  for(int i=0; i<strlen(s); i++)
+    {
+       if(s[i] == ',' && s[i+1] == '"')
+         {
+           strncpy(strinfo, s+i+2, strlen(s)-i-3);
+           strinfo[strlen(s)-i-3] = '\0';
+           break;
+         }
+    }
+
+  struct tm tm;
+  struct timeval tv;
+  time_t timep;
+  sscanf(strinfo, "%d/%d/%d,%d:%d:%d",&tm.tm_year, &tm.tm_mon, &tm.tm_mday,&tm.tm_hour, &tm.tm_min, &tm.tm_sec);
+  tm.tm_mon = tm.tm_mon-1;
+  tm.tm_year = tm.tm_year-1900;
+
+  timep = mktime(&tm);
+  tv.tv_sec = timep;
+  tv.tv_usec = 0;
+  if(settimeofday(&tv, NULL) < 0)
+    {
+      rillog(LOG_ERR, "%s settimeofday error\n", LOG_TAG);
+    }
+}
+
 void handleUnsolicited(const char *s)
 {
   ATClient *atClient;
@@ -1203,6 +1242,9 @@ void handleUnsolicited(const char *s)
       pthread_cond_signal(gModemReadycond);
       pthread_mutex_unlock(gModemReadymutex);
     }
+
+  //by NAS time, set system time
+  setSystemTime(s);
 
   if (!gIndicationDisable)
     {
@@ -1218,7 +1260,6 @@ void handleUnsolicited(const char *s)
       pthread_mutex_unlock(&(gServer->mClientsLock));
     }
 }
-
 
 static void processLine(const char *line, ATUartS *pAtUarts)
 {
@@ -1307,7 +1348,6 @@ static void processLine(const char *line, ATUartS *pAtUarts)
   pthread_mutex_unlock(&(pAtUarts->mCommandmutex));
 }
 
-
 static int channelReader(ATUartS *pAtUarts)
 {
   const char *line;
@@ -1330,7 +1370,6 @@ static int channelReader(ATUartS *pAtUarts)
     }
   return 0;
 }
-
 
 void *reader_loop(void *obj)
 {
@@ -1379,7 +1418,6 @@ void *reader_loop(void *obj)
   return NULL;
 }
 
-
 static int ril_daemon(int argc, char *argv[])
 {
   int i;
@@ -1415,7 +1453,6 @@ static int ril_daemon(int argc, char *argv[])
       rillog(LOG_ERR, "%s %s: pthread_create (%s)\n", LOG_TAG, __func__, strerror(errno));
       goto clean;
     }
-
 
   ATServerRun();
 
