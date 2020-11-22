@@ -56,6 +56,8 @@
 #include <nuttx/board.h>
 
 #include "at_client/at_log.h"
+#include "at_client/at_tok.h"
+
 
 #define MAX_AT_SIZE   600
 #define TIMEOUT_DEFALUT (20 * 1000)
@@ -1203,31 +1205,73 @@ void setSystemTime(const char *s)
     {
       return;
     }
-
-  char strinfo[20];
-  for(int i=0; i<strlen(s); i++)
+  char* strctze = strdup(s);
+  char* strctze_temp = strctze;
+  if(strctze == NULL)
     {
-       if(s[i] == ',' && s[i+1] == '"')
-         {
-           strncpy(strinfo, s+i+2, strlen(s)-i-3);
-           strinfo[strlen(s)-i-3] = '\0';
-           break;
-         }
+      return;
+    }
+
+  //  +CTZE: +32,0,"2020/11/20,07:01:57"
+  char* p;
+  char calsign[2];
+  int timezone;
+
+  int ret = at_tok_start(&strctze_temp);
+  if (ret < 0)
+    {
+      return;
+    }
+  ret = at_tok_nextstr(&strctze_temp, &p);
+  if (ret < 0)
+    {
+      return;
+    }
+  strncpy(calsign, p, 1);
+  calsign[1] = '\0';
+
+  ret = at_tok_nextint(&p, &timezone);
+  if (ret < 0)
+    {
+      return;
+    }
+  ret = at_tok_nextstr(&strctze_temp, &p);
+  if (ret < 0)
+    {
+      return;
+    }
+  ret = at_tok_nextstr(&strctze_temp, &p);
+  if (ret < 0)
+    {
+      return;
     }
 
   struct tm tm;
   struct timeval tv;
   time_t timep;
-  sscanf(strinfo, "%d/%d/%d,%d:%d:%d",&tm.tm_year, &tm.tm_mon, &tm.tm_mday,&tm.tm_hour, &tm.tm_min, &tm.tm_sec);
+  sscanf(p, "%d/%d/%d,%d:%d:%d",&tm.tm_year, &tm.tm_mon, &tm.tm_mday,&tm.tm_hour, &tm.tm_min, &tm.tm_sec);
   tm.tm_mon = tm.tm_mon-1;
   tm.tm_year = tm.tm_year-1900;
 
   timep = mktime(&tm);
-  tv.tv_sec = timep;
+  if(strncmp(calsign, "+", 1) == 0)
+    {
+      tv.tv_sec = timep + timezone * 15 * 60;
+    }
+  else
+    {
+      tv.tv_sec = timep - timezone * 15 * 60;
+    }
   tv.tv_usec = 0;
   if(settimeofday(&tv, NULL) < 0)
     {
       rillog(LOG_ERR, "%s settimeofday error\n", LOG_TAG);
+    }
+
+  if(strctze != NULL)
+    {
+      free(strctze);
+      strctze = NULL;
     }
 }
 
