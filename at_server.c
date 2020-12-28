@@ -695,7 +695,7 @@ int sendResponse(int fd, bool success, const void *data, uint16_t size, char typ
 static void wakeup_cp(void)
 {
   int fd;
-  fd = open("/dev/misc", 0);
+  fd = open("/dev/miscsp", 0);
   if (fd >= 0)
     {
       struct misc_remote_boot_s remote =
