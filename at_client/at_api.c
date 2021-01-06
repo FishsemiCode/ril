@@ -1064,3 +1064,21 @@ clean:
   at_c_response_free(response);
   return ret;
 }
+
+int set_gps_position_mode(int clientfd, int mode_value)
+{
+  ATResponse *response = NULL;
+  int ret;
+  char buf[20] = {0};
+  snprintf(buf, sizeof(buf), "AT+PGNSS+$CFGPOS,%d", mode_value);
+  ret = sendATRequest(clientfd, buf, &response);
+  if (ret < 0 || response->error != NONE_ERROR)
+    {
+      ret = -1;
+      goto clean;
+    }
+  ret = 0;
+clean:
+  at_c_response_free(response);
+  return ret;
+}

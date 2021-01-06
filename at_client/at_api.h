@@ -204,4 +204,5 @@ int pgnss_cfg(int clientfd, PGNSS_MODE mode);
 int get_rfsleep_remain_time(int clientfd, unsigned int *remain_ms);
 int set_pwrmaxvalue(int clientfd, int value);
 int get_pwrmaxvalue(int clientfd, int *pwrmaxvalue);
+int set_gps_position_mode(int clientfd, int mode_value);
 #endif
