@@ -718,6 +718,7 @@ void free_pdpcontextinfolist(at_api_pdpcontexinfo **ppdpcontextinfoarray,
             {
               free(ppdpcontextinfoarray[index]->address);
             }
+          free(ppdpcontextinfoarray[index]);
         }
     }
   if (arraysize > 0)
