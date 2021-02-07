@@ -1083,3 +1083,37 @@ clean:
   at_c_response_free(response);
   return ret;
 }
+
+int get_esmdatabuf(int clientfd, int *esmdatabuf)
+{
+  ATResponse *response = NULL;
+  int ret = -1;
+  char *line;
+  int value;
+  ret = sendATRequest(clientfd, "AT+ESMDATABUF?", &response);
+  if (ret < 0 || response->error != NONE_ERROR)
+    {
+      ret = -1;
+      goto clean;
+    }
+  line = response->lines[0];
+
+  ret = at_tok_start(&line);
+  if (ret < 0)
+    {
+      goto clean;
+    }
+  //value
+  ret = at_tok_nextint(&line, &value);
+  if (ret < 0)
+    {
+      goto clean;
+    }
+
+  *esmdatabuf = value;
+
+clean:
+  at_c_response_free(response);
+  return ret;
+}
+
