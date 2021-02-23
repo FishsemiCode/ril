@@ -928,22 +928,26 @@ int get_vbat(int clientfd, int port, int *vbat)
   if (ret < 0 || response->error != NONE_ERROR)
     {
       ret = -1;
+      syslog(LOG_ERR, "func:%s line:%d ret:%d.\n\n", __func__, __LINE__, ret);
       goto clean;
     }
   line = response->lines[0];
   ret = at_tok_start(&line);
   if (ret < 0)
     {
+      syslog(LOG_ERR, "func:%s line:%d ret:%d.\n\n", __func__, __LINE__, ret);
       goto clean;
     }
   ret = at_tok_nextstr(&line, &p);
   if (ret < 0)
     {
+      syslog(LOG_ERR, "func:%s line:%d ret:%d.\n\n", __func__, __LINE__, ret);
       goto clean;
     }
   *vbat = atoi(p);
   ret = 0;
 clean:
+  syslog(LOG_INFO, "func:%s line:%d ret:%d.\n\n", __func__, __LINE__, ret);
   at_c_response_free(response);
   return ret;
 }
