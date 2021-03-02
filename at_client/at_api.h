@@ -206,4 +206,5 @@ int set_pwrmaxvalue(int clientfd, int value);
 int get_pwrmaxvalue(int clientfd, int *pwrmaxvalue);
 int set_gps_position_mode(int clientfd, int mode_value);
 int get_esmdatabuf(int clientfd, int *esmdatabuf);
+int set_gps_ephemeris_mode(int clientfd, int mode_value);
 #endif
