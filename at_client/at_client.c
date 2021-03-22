@@ -285,7 +285,7 @@ int sendATRequest(int clientid, const char *ATLine, ATResponse **pp_outResponse)
   pthread_mutex_lock(&gATRequestMutex);
   gAtRequest = atReq;
 
-  rillog(LOG_INFO, "%s %s: clientfd(%d): send command: %s", LOG_TAG, __func__, clientfd, ATLine);
+  rillog(LOG_INFO, "%s %s: clientfd(%d): send command: %s\n", LOG_TAG, __func__, clientfd, ATLine);
   ret = sendRawRequest(clientfd, ATLine, strlen(ATLine));
   if (ret == -1)
     {
