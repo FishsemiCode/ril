@@ -1264,10 +1264,10 @@ void setSystemTime(const char *s)
       tv.tv_sec = timep - timezone * 15 * 60;
     }
   tv.tv_usec = 0;
-  if(settimeofday(&tv, NULL) < 0)
+  /* if(settimeofday(&tv, NULL) < 0)
     {
       rillog(LOG_ERR, "%s settimeofday error\n", LOG_TAG);
-    }
+    } */
 
   if(strctze != NULL)
     {
