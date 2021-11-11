@@ -295,19 +295,20 @@ int sendATRequest(int clientid, const char *ATLine, ATResponse **pp_outResponse)
       return -1;
     }
 
+  pthread_mutex_lock(&atReq->s_commandmutex);
   while (atReq->response->finalResponse == 0)
     {
-      pthread_mutex_lock(&atReq->s_commandmutex);
-      ret = pthreadCondWait(&atReq->s_commandcond, &atReq->s_commandmutex, 0);
-      pthread_mutex_unlock(&atReq->s_commandmutex);
+      ret = pthreadCondWait(&atReq->s_commandcond, &atReq->s_commandmutex, 30000);
       if (ret == ETIMEDOUT)
         {
+          pthread_mutex_unlock(&atReq->s_commandmutex);
           at_c_request_free(gAtRequest);
           gAtRequest = NULL;
           pthread_mutex_unlock(&gATRequestMutex);
           return -1;
         }
     }
+  pthread_mutex_unlock(&atReq->s_commandmutex);
   ret = 0;
 
   if (pp_outResponse == NULL)
@@ -517,9 +518,8 @@ static void *readerLoop(void *arg)
               char *line;
               atReq = gAtRequest;
               atReq->response->error = buffer[1];
-              atReq->response->finalResponse = 1;
 
-              if (atReq->response->error == 0 && buffer[2] != 0)
+              if (atReq->response->error == 0 && buflen > 2 && buffer[2] != 0)
                 {
                   atReq->response->lineNumber = buffer[2];
                   atReq->response->lines = (char **)malloc(atReq->response->lineNumber * sizeof(char *));
@@ -532,6 +532,7 @@ static void *readerLoop(void *arg)
                     }
                 }
               pthread_mutex_lock(&atReq->s_commandmutex);
+              atReq->response->finalResponse = 1;
               pthread_cond_signal(&atReq->s_commandcond);
               pthread_mutex_unlock(&atReq->s_commandmutex);
             }
